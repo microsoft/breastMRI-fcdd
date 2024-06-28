@@ -2,8 +2,8 @@
 Code for deep explainable anomaly detection, based on the Fully Convolutional Data Description (FCDD) model (Liznerski et al., 2021).
 
 ## Installation
-It is recommended to use a virtual environment to install FCDD.
-Assuming you're in the `python` directory, install FCDD via pip:
+It is recommended to use a Conda virtual environment to install FCDD.
+Assuming you're in the `python` directory in the repository, install FCDD via pip:
 
     conda create --name fcdd python=3.9
     conda activate fcdd
