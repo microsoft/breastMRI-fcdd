@@ -1,5 +1,5 @@
 # FCDD
-Code for deep explainable anomaly detection, based on the Fully Convolutional Data Description (FCDD) model (Liznerski et al., 2021).
+Code for deep explainable anomaly detection, based on the Fully Convolutional Data Description (FCDD) model (Liznerski et al., 2021). Fork from repo: https://github.com/liznerski/fcdd
 
 ## Installation
 It is recommended to use a Conda virtual environment to install FCDD.
@@ -106,7 +106,7 @@ Once the model is trained, is very easy to point to a particular results folder 
         results_path=results_path, log_path=target_path, on_train=False
     )
 
-Where 'results_path' is the path to the results folder (specific model and iteration) and 'log_path' is the path to the target folder where the results will be saved. The 'on_train' flag is used to indicate if the predictions are to be made on the training set or the test set. The test set is defined by the config.txt file in the results folder. This function will return the predicted score and other metrics, along with a 'trainer' object that can be used to generate heatmaps.
+Where 'results_path' is the path to the results folder (specific model and iteration) and 'log_path' is the path to the target folder where the results will be saved. The 'on_train' flag is used to indicate if the predictions are to be made on the training set or the test set. The test set is defined by the config.txt file in the results folder. This function will return the predicted score and other metrics, along with a 'trainer' object that can be used to generate heatmaps. $Important$: The order of files in the ouptut results changes compared to the alphanumeric order of the files in the input folder, see example scripts below to handle this.
 
 The heatmaps can be generated using the 'generate_heatmaps' method in the trainer object. The heatmaps will be saved in the 'log_path' folder, both a random sample of heatmaps and heatmaps for specific indices can be generated. For example, for FCDD heatmaps, the following method can be used:
 
