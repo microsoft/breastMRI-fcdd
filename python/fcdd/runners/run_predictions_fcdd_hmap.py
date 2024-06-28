@@ -9,28 +9,24 @@ from predictor import predict_and_evaluate
 from fcdd.util.logging import Logger
 
 
-# Define a list of strings based on a list of integers moddifying an f-string
+# Define path to trained results
 base_path = "../../../data/results"
-
-#target_path = f"{base_path}/cv_maps/fcdd_task_1"
-# target_path = f"{base_path}/cv_maps/fcdd_task_2"
-#target_path = f"{base_path}/cv_maps/fcdd_task_0" # Used for all figures except for 2024 updates (Figures 3 and 4 with changes)
-target_path = f"{base_path}/cv_maps/fcdd_2024_figs"
+# Define desired path to save heatmaps
+target_path = f"{base_path}/cv_maps/figs"
 logger = Logger(target_path)
 
 task = 0
 
-#results_path = f"{base_path}/fcdd_20220826232004fcdd_task1_cv_0_custom_/normal_0/it_1/"
+# Define path to model results and trainer
 results_path = f"/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230811001734task0_no_aug_200_fcdd_0_custom_/normal_0/it_3/"
-#results_path = f"/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230811205123task1_no_aug_200_fcdd_0_custom_/normal_0/it_3/" # New with 200 epochs
-#results_path = f"{base_path}/fcdd_20221201142136fcdd_task2_cv_0_225_custom_/normal_0/it_2/"
 
+# Make predictions for the test set using the trained FCDD model
 results_test, trainer = predict_and_evaluate(
     results_path=results_path, log_path=target_path, on_train=False
 )
 
 #%%
-# Account for balance_class() operation in training set
+# Account for balance_class() operation in training set, which changes the order of the files
 # Create a dictionary based on results_train["all_paths"] where the keys are the positions of the paths and the values are the paths
 ind_to_path = {
     i: results_test["all_paths"][i] for i in range(len(results_test["all_paths"]))
@@ -47,150 +43,14 @@ df["all_scores"] = results_test["all_scores"]
 df["all_paths"] = results_test["exp_paths"]
 df = df.drop_duplicates(subset="all_paths")
 df["study_id"] = df["all_paths"].apply(lambda x: x.split("/")[-1].split(".")[0])
-#%%
-
-# Plots ranked images based on the all_scores column
-def plot_many_imgs(df, n_row=24, n_col=8, plot_type="most"):
-    # Plots the least / most anomalous images
-    # Plots 24*8 images --> 192 most anomalous
-    _, axs = plt.subplots(n_row, n_col, figsize=(18, 48))
-    df_2 = df.copy()
-    df_2 = df_2.sort_values(by="all_scores")
-    axs = axs.flatten()
-    if plot_type == "most":
-        idxs = df_2.index[-n_row * n_col :]
-    elif plot_type == "least":
-        idxs = df_2.index[: n_row * n_col]
-    for img, ax in zip(idxs, axs):
-        ax.imshow(plt.imread(df_2["all_paths"][img]), cmap="Greys_r")
-        # Print the label and the fname in the title
-        ax.set_title(f"{df_2['all_labels'][img]} -- {df['study_id'][img]} -- {img}")
-    plt.tight_layout()
-    plt.show()
-
-plot_many_imgs(df, plot_type="most")
-
 
 
 #%%%
-### Computes heatmaps of Figure 4a and Figure 4b
+### Computes heatmaps for FCDD. 'specific_idx' is a tuple of lists, where the first list contains the indices of the heatmaps of interest for the normal and the second list for the abnormal class.
 trainer.heatmap_generation(
-    labels = results_test["all_labels"],
-    ascores = results_test["all_upsampled"],
-    imgs = results_test["all_images"],
-    name="fig4a",
-    specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]),
+    labels = results_test["all_labels"], # All labels
+    ascores = results_test["all_upsampled"], # All model predicted scores
+    imgs = results_test["all_images"], # All images
+    name="example_fig", # Name of the figure
+    specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]), # In addition to a random sample, the model will predict specific indices in the image list
 )
-
-#### Figure 4
-# Task #1 in Paper (task 0 in runs)
-# [2948, 3061, 2851, 2924, 2860, 891, 1991]
-# [67, 49, 459, 38, 59, 17, 3298]
-# Task # 2 in Paper (task 1 in runs)
-# [644, 519, 518, 517, 1811]
-# [44, 25, 48, 10, 34, 30, 22]
-# Task #3 (5 year risk -- not in paper)
-#  NaN
-# [2, 3, 6, 21, 1, 0, 16]
-
-#%%
-BASE_DIR = "/home/felipeoviedoperhavec/ssdprivate/FH"  # Adjust accordingly
-metadata_df = pd.read_csv(f"{BASE_DIR}/data/metadata/metadata.csv", index_col=0)
-metadata_df["Breast"] = metadata_df["StudyId"] + metadata_df["MRILaterality"]
-metadata_filtered_df = metadata_df[["Age", "Breast", "BIRADS", "Final Class Benign/Malignant"]]
-# Left join df with metadata_filtered_df on study_id and Breast
-df = df.merge(metadata_filtered_df, left_on="study_id", right_on="Breast", how="left")
-
-#%%
-## Generating results for confusion matrix of explanation (fig 4c)
-# Create new column "Prediction" by thresholding the all_scores column
-task = 0
-if task == 0:
-    df["Prediction"] = df["all_scores"].apply(lambda x: 1 if x > 0.07 else 0) # Pick being conservative (less false negatives)
-
-from sklearn.metrics import confusion_matrix
-confusion_matrix(df["all_labels"], df["Prediction"])
-
-#%%
-# Based on the exploration of the indices above create indices lists
-# tp = [0, 2, 5] # Old version
-tp = [0, 2, 5, 6, 11] # New version with additional indices
-# tn = [647, 654, 657] 
-tn = [647, 654, 657, 670, 673] # New version with additional indices
-# fp = [653, 661, 658]
-fp = [653, 661, 658, 659, 660] # New version with additional indices
-# fn = [92, 127, 80]
-fn = [92, 127, 80, 96, 103]
-
-
-# Append the indices to a list
-indices = tp + tn + fp + fn
-
-# #%%
-# # In df find the rows with all_labels == 1 and Prediction == 0
-# df[(df["all_labels"] == 1) & (df["Prediction"] == 0)]
-
-#%%
-def plot_images(indices, title, row, ax):
-    for col, i in enumerate(indices):
-        ax[row, col].imshow(plt.imread(df["all_paths"][i]), cmap="Greys_r")
-        ax[row, col].set_title(f"{title} {i}")  # Using the index i itself as the title
-        #ax[row, col].axis('off')  # Hide the axis
-
-# Create a subplot layout
-fig, ax = plt.subplots(4, len(tp), figsize=(15, 10))  # Adjust figure size as needed
-
-# Plot true positives
-plot_images(tp, "TP", 0, ax)
-# Plot false positives
-plot_images(fp, "FP", 1, ax)
-# Plot true negatives
-plot_images(tn, "TN", 2, ax)
-# Plot false negatives
-plot_images(fn, "FN", 3, ax)
-plt.show()
-
-#%%
-# Create heatmap for figure 4c
-trainer.heatmap_generation(
-    labels = results_test["all_labels"],
-    ascores = results_test["all_upsampled"],
-    imgs = results_test["all_images"],
-    name="fig4c_2024",
-    specific_idx=([0], indices),
-)
-
-
-# %%
-# Create figure OLD figure 4d. Go over the BIRADS scores from 0 to 6 and pick two random rows for each BIRADS score. Then plot
-
-birads = [0, 1, 2, 3, 4, 5, 6]
-birads_indices = []
-for b in birads:
-    # Get the indices of the rows with the BIRADS score
-    birads_index = df[df["BIRADS"] == b].index
-    # Sample two random indices from the birads_index
-    birads_indices.append(np.random.choice(birads_index, 2, replace=False))
-
-# Plot each of the indices with plot_images Function
-fig, ax = plt.subplots(7, 2, figsize=(15, 10))  # Adjust figure size as needed
-for row, birads_index in enumerate(birads_indices):
-    plot_images(birads_index, f"BIRADS {row}", row, ax)
-plt.show()
-
-#%%
-# Good indices based on task 0, ascending order [array([2795,  762]), array([3000,  856]), array([ 675, 1184]), array([2768, 2173]), array([2307,  855]), array([272, 300]), array([372, 144])]
-
-# Combined birads_indices into a single list
-birads_indices = [item for sublist in birads_indices for item in sublist]
-
-# Run predictions
-trainer.heatmap_generation(
-    labels = results_test["all_labels"],
-    ascores = results_test["all_upsampled"],
-    imgs = results_test["all_images"],
-    name="fig4d",
-    specific_idx=([0], birads_indices),
-)
-#%%
-
