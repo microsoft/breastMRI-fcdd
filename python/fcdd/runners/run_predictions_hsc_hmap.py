@@ -17,7 +17,7 @@ target_path = f"{base_path}/cv_maps/hsc_task_1"
 logger = Logger(target_path)
 
 # Path to specific training results and model
-results_path = ("/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230813151957task1_no_aug_200_hsc_0_custom_/normal_0/it_2/")
+results_path = ("/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230813151957task0_no_aug_200_hsc_0_custom_/normal_0/it_0/")
 results_test, trainer = predict_and_evaluate_hsc(
     results_path=results_path, log_path=target_path, on_train=False
 )
@@ -50,22 +50,24 @@ df["study_id"] = df["all_paths"].apply(lambda x: x.split("/")[-1].split(".")[0])
 import torch
 all_scores = torch.tensor(results_test["all_scores"]).unsqueeze(-1)
 
-# Fort task 0
-# trainer.heatmap_generation(
-#     labels=results_test["all_labels"],
-#     ascores=all_scores,
-#     imgs=results_test["all_images"],
-#     name="t0",
-#     specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]),
-#     grads=results_test["all_grads"],
-# )
-
-# For task 1
+# For task 0
 trainer.heatmap_generation(
     labels=results_test["all_labels"],
     ascores=all_scores,
     imgs=results_test["all_images"],
-    name="t1",
-    specific_idx=([644, 519, 518, 517, 1811], [44, 25, 48, 10, 34, 30, 22]),
+    name="test_t0",
+    specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]),
     grads=results_test["all_grads"],
 )
+
+# For task 1
+# trainer.heatmap_generation(
+#     labels=results_test["all_labels"],
+#     ascores=all_scores,
+#     imgs=results_test["all_images"],
+#     name="t1",
+#     specific_idx=([644, 519, 518, 517, 1811], [44, 25, 48, 10, 34, 30, 22]),
+#     grads=results_test["all_grads"],
+# )
+
+# %%

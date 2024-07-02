@@ -5,6 +5,7 @@ import os
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from predictor import predict_and_evaluate_bce
 from fcdd.util.logging import Logger
 
@@ -41,15 +42,24 @@ df["all_paths"] = results_test["exp_paths"]
 #%%
 # Drop all rows with repeated paths
 df = df.drop_duplicates(subset="all_paths")
+
+#%%
+from sklearn.metrics import roc_auc_score
+
+roc_auc_score(df["all_labels"], df["all_scores"])
+print(f"ROC AUC: {roc_auc_score(df['all_labels'], df['all_scores'])}")
 #%%
 # Create a column with study id by taking the last part of the path and removing .tiff
 df["study_id"] = df["all_paths"].apply(lambda x: x.split("/")[-1].split(".")[0])
+# Read results_test["all_scores"] as torch tensor, is a list orignally
+all_scores = torch.tensor(results_test["all_scores"]).unsqueeze(-1)
 
 trainer.heatmap_generation(
     labels=results_test["all_labels"],
-    ascores=results_test["all_scores"],
+    ascores=all_scores,
     imgs=results_test["all_images"],
-    name="t0",
+    name="eval0",
     specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]),
     grads=results_test["all_grads"],
 )
+# %%

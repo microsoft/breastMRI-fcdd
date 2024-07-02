@@ -18,8 +18,7 @@ logger = Logger(target_path)
 task = 0
 
 # Define path to model results and trainer
-results_path = f"/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230811001734task0_no_aug_200_fcdd_0_custom_/normal_0/it_3/"
-
+results_path = ("/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/python/data/results/fcdd_20230811001734task0_no_aug_200_fcdd_0_custom_/normal_0/it_0/")
 # Make predictions for the test set using the trained FCDD model
 results_test, trainer = predict_and_evaluate(
     results_path=results_path, log_path=target_path, on_train=False
@@ -51,6 +50,7 @@ trainer.heatmap_generation(
     labels = results_test["all_labels"], # All labels
     ascores = results_test["all_upsampled"], # All model predicted scores
     imgs = results_test["all_images"], # All images
-    name="example_fig", # Name of the figure
+    name="test", # Name of the figure
     specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]), # In addition to a random sample, the model will predict specific indices in the image list
 )
+# %%
