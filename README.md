@@ -37,7 +37,7 @@ For training, the parameters are the same in both cases, and only the directory 
 
 For $FCDD$, assuming we are focusing on Task 1, the training command run from the 'python/fcdd' directory is as follows:
 
-    python run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_task0_cv_0 --net FCDD_CNN224_VGG_NOPT --workers 6 --it 5 --epochs 200 --batch-size 32 --blur-heatmaps --objective fcdd --logdir-suffix task0_fcdd --gpu 0
+    python run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_task0_cv_0 --net FCDD_CNN224_VGG_NOPT --workers 4 --it 1 --epochs 1 --batch-size 32 --blur-heatmaps --objective fcdd --logdir-suffix task0_fcdd --gpu 0
 
 Similarly for $BCE$ (Binary Cross Entropy), our usual baseline, we have:
 

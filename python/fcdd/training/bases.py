@@ -404,28 +404,28 @@ class BaseADTrainer(BaseTrainer):
         """
         self.net = self.net.to(self.device).eval()
 
-        self.logger.print("Test training data...", fps=False)
-        (
-            labels,
-            loss,
-            anomaly_scores,
-            imgs,
-            outputs,
-            gtmaps,
-            grads,
-            refs,
-        ) = self._gather_data(self.train_loader)
-        self.heatmap_generation(
-            labels,
-            anomaly_scores,
-            imgs,
-            gtmaps,
-            grads,
-            name="train_heatmaps",
-            subdir=subdir,
-        )
+        # self.logger.print("Test training data...", fps=False)
+        # (
+        #     labels,
+        #     loss,
+        #     anomaly_scores,
+        #     imgs,
+        #     outputs,
+        #     gtmaps,
+        #     grads,
+        #     refs,
+        # ) = self._gather_data(self.train_loader)
+        # self.heatmap_generation(
+        #     labels,
+        #     anomaly_scores,
+        #     imgs,
+        #     gtmaps,
+        #     grads,
+        #     name="train_heatmaps",
+        #     subdir=subdir,
+        # )
 
-        self.logger.print("Test test data...", fps=False)
+        self.logger.print("Test test data... (only)", fps=False)
         (
             labels,
             loss,
@@ -463,6 +463,7 @@ class BaseADTrainer(BaseTrainer):
             sc = self.score(
                 labels, anomaly_scores, imgs, outputs, gtmaps, grads, subdir=subdir
             )
+        
         return sc
 
     def _gather_data(
