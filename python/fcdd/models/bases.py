@@ -1,3 +1,7 @@
+# Copyright (c) 2021 liznerski (original FCDD work)
+# Copyright (c) 2025 Microsoft Corporation (FCDD for breast cancer detection)
+# Licensed under the MIT License.
+
 from abc import abstractmethod, ABC
 from copy import deepcopy
 from typing import List, Tuple

@@ -1,3 +1,7 @@
+# Copyright (c) 2021 liznerski (original FCDD work)
+# Copyright (c) 2025 Microsoft Corporation (FCDD for breast cancer detection)
+# Licensed under the MIT License.
+
 from fcdd.datasets.image_folder import extract_custom_classes
 from fcdd.runners.bases import ClassesRunner
 from fcdd.runners.argparse_configs import DefaultConfig

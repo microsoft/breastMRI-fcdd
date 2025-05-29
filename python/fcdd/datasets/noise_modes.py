@@ -1,3 +1,7 @@
+# Copyright (c) 2021 liznerski (original FCDD work)
+# Copyright (c) 2025 Microsoft Corporation (FCDD for breast cancer detection)
+# Licensed under the MIT License.
+
 import torch
 from fcdd.datasets.noise import confetti_noise, colorize_noise, solid, smooth_noise
 from fcdd.datasets.outlier_exposure.cifar100 import OECifar100

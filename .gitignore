@@ -50,6 +50,7 @@ venv
 dist
 python/fcdd/post
 python/preprocessing
+add_copy.py
 
 # build
 build

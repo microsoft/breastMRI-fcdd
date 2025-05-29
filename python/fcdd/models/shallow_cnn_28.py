@@ -1,3 +1,7 @@
+# Copyright (c) 2021 liznerski (original FCDD work)
+# Copyright (c) 2025 Microsoft Corporation (FCDD for breast cancer detection)
+# Licensed under the MIT License.
+
 from fcdd.models.bases import BaseNet
 from fcdd.models.fcdd_cnn_28 import FCDD_CNN28, FCDD_CNN28_W
 import torch
