@@ -1,7 +1,7 @@
 matplotlib==3.4.2
 numpy==1.19.3
 torchvision==0.10.1
-torch==1.9.1
+torch==2.7.0
 opencv-python==4.5.1.48
 six==1.16.0
 scipy==1.6.3
