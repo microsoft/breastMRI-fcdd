@@ -1,3 +1,4 @@
+
 # FCDD - Explainable Anomaly Detection for Breast MRI Cancer Screening
 
 This is an implementation of the models described in the paper **"Cancer detection in breast MRI screening via explainable artificial intelligence anomaly detection"**.
@@ -6,6 +7,15 @@ FCDD enables both high-performance anomaly detection and anomaly explanations in
 
 ![FCDD Overview](visual.png)
 
+## 📚 Table of Contents
+
+- [📄 Citation](#-citation)
+- [📦 Installation](#-installation)
+- [📁 Dataset Structure](#-dataset-structure)
+- [🧪 Basic Usage](#-basic-usage)
+- [🏃 Training Examples](#-training-examples)
+- [🔬 Explanation of Log Data after Training](#-explanation-of-log-data-after-training)
+- [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps)
 
 ## 📄 Citation
 
@@ -109,8 +119,10 @@ To perform inference, you can use:
 
 File paths are automatically mapped to handle any reordering during data processing.
 
-## 🏃 Training Examples
+To try out model predictions on sample data, see the [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps) section.
 
+
+## 🏃 Training Examples
 <details>
 <summary>Click to expand</summary>
 
