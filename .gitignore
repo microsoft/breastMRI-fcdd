@@ -51,6 +51,7 @@ dist
 python/fcdd/post
 python/preprocessing
 add_copy.py
+!visual.png
 
 # build
 build
