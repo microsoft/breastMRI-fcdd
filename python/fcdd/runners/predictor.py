@@ -82,16 +82,11 @@ def load_config(results_path):
                 config = {i[1:-1]: config[i] for i in config}
                 config = {i: config[i].replace('"', "") for i in config}
 
-    # Replace "ssdshared" with "ssdprivate" in config["datadir"] for legacy paths
-    # config["datadir"] = config["datadir"].replace("ssdshared", "ssdprivate")
-    # config["gpu"] = 2
-
     return config
 
 
 def load_model(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
-    # Pick the architecture that was used for the snapshot
     if config["net"] == "FCDD_CNN224_VGG_NOPT":
         net = FCDD_CNN224_VGG_NOPT((3, 224, 224), bias=True).cuda(device=device)
         # Load data and make predictions
@@ -559,9 +554,6 @@ def predict_and_evaluate_hsc(
 
     trainer = load_model(config, logger, device)
     trainer.load(results_path + "snapshot.pt")
-
-    # Send trainer net to device 1 using .to
-    # trainer.net.to(device).eval()
     trainer.net.eval()
 
     # # Make predictions
@@ -628,13 +620,3 @@ def predict_and_evaluate_hsc(
         return results
 
     return results, trainer
-
-# FCDD usage
-# results_path = "/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/data/results/fcdd_20220826232004fcdd_task1_cv_0_custom_/normal_0/it_0/"
-# log_path = "../../../data/results/predicted2/"
-# results = predict_and_evaluate(results_path=results_path, log_path=log_path)
-
-# BCE usage
-# results_path = "/home/felipeoviedoperhavec/azurefiles/projects/FH.MRIbreast_fcdd/data/results/fcdd_20220922210714bce_task2_cv_0_crop_custom_/normal_0/it_0/"
-# log_path = "../../../data/results/predicted2/"
-# results = predict_and_evaluate_bce(results_path=results_path, log_path=log_path)

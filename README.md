@@ -1,8 +1,11 @@
-# 🔬 FCDD - Explainable Anomaly Detection for Breast MRI Cancer Screening
+# FCDD - Explainable Anomaly Detection for Breast MRI Cancer Screening
 
 This is an implementation of the models described in the paper **"Cancer detection in breast MRI screening via explainable artificial intelligence anomaly detection"**.
 
-FCDD enables both high-performance anomaly detection and anomaly explanations in the form of heatmaps. The original FCDD implementation is available [here](https://github.com/liznerski/fcdd).
+FCDD enables both high-performance anomaly detection and anomaly explanations in the form of heatmaps, with emphasis on extreme class imbalance. The original FCDD implementation is available [here](https://github.com/liznerski/fcdd).
+
+![FCDD Overview](visual.png)
+
 
 ## 📄 Citation
 
@@ -157,22 +160,22 @@ File paths are automatically mapped to handle any reordering during data process
 
 ## 💻 Demo of Predictions and Anomaly Heatmaps
 
-Model checkpoints were trained on of the cross-validation splits of the "model development" dataset in the paper. This private dataset is IRB-Approved and owned by University of Washington and Fred Hutchinson Cancer Research Center.
+Model checkpoints were trained on one of the cross-validation splits of the *model development dataset*, as described in the publication. This private dataset is IRB-Approved and owned by University of Washington and Fred Hutchinson Cancer Research Center, as shared just for demonstration purposes. The model checkpoints are not intended for clinical use and should not be used for patient care.
 
-Download demo of the trained models and sample data from zenodo:
+Download model checkpoints (fcdd, hsc, bce) and example data from zenodo:
 
     wget https://zenodo.org/record/{TO_BE_ADDED}/files/fcdd_demo.zip
     unzip fcdd_demo.zip
 
-Run the prediction script for fcdd with task 2:
+Run the prediction script for FCDD with task 2:
 
     python runners/predict_custom.py --model fcdd --task 2
 
-Run the prediction script for bce with task 2:
+Run the prediction script for BCE with task 2:
 
     python runners/predict_custom.py --model bce --task 2
 
-Run the prediction script for hsc with task 2:
+Run the prediction script for HSC with task 2:
 
     python runners/predict_custom.py --model hsc --task 2
 

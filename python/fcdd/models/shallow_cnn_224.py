@@ -309,14 +309,3 @@ class CNN224_CROP(BaseNet):
     def forward(self, x, ad=True):
         x = self.features_n(x)
         return x
-
-
-# from pytorch_model_summary import summary
-
-# print(
-#     summary(
-#         CNN224_RESNET_NOPT(in_shape=(3, 224, 224), bias=True),
-#         torch.zeros(1, 3, 224, 224),
-#         show_input=False,
-#     )
-# )
