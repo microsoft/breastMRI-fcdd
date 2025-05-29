@@ -85,7 +85,7 @@ def load_config(results_path):
     return config
 
 
-def load_model(config: dict, logger: Logger, device: int = 1):
+def load_model(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
     # Pick the architecture that was used for the snapshot
     if config["net"] == "FCDD_CNN224_VGG_NOPT":
@@ -159,7 +159,7 @@ def load_model(config: dict, logger: Logger, device: int = 1):
     return trainer
 
 
-def load_model_ref(config: dict, logger: Logger, device: int = 4):
+def load_model_ref(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
     net = FCDD_REF_CNN224_VGG_NOPT((3, 224, 224), bias=True).cuda(device=device)
     # Load data and make predictions
@@ -184,7 +184,7 @@ def predict_and_evaluate(
     results_path: str,
     log_path: str,
     generate_heatmaps: bool = False,
-    device: int = 1,
+    device: int = 0,
     on_train: bool = False,
     data_dir_path: str = None,
     no_trainer: bool = False,
@@ -216,7 +216,10 @@ def predict_and_evaluate(
         d_test = ds.train_set
 
     trainer = load_model(config, logger, device)
+
+    map_location = f"cuda:{device}" if torch.cuda.is_available() and isinstance(device, int) else "cpu"
     trainer.load(results_path + "snapshot.pt")
+
     trainer.net.eval()
 
     # Make predictions
@@ -225,7 +228,7 @@ def predict_and_evaluate(
     all_indices = d_test.indices
 
     # Make predictions
-    loader = DataLoader(d_test, batch_size=1, num_workers=8)
+    loader = DataLoader(d_test, batch_size=16, num_workers=8)
 
     all_anomaly_scores, all_inputs, all_labels, all_upsampled = [], [], [], []
     for inputs, labels in loader:
@@ -302,7 +305,7 @@ def predict_and_evaluate_ref(
     results_path: str,
     log_path: str,
     generate_heatmaps: bool = False,
-    device: int = 1,
+    device: int = 0,
     on_train: bool = False,
     data_dir_path: str = None,
     no_trainer: bool = False,
@@ -310,6 +313,9 @@ def predict_and_evaluate_ref(
 
     config = load_config(results_path)
     logger = Logger(log_path)
+
+    if data_dir_path is not None:
+        config["datadir"] = data_dir_path
 
     # Define Dataset
     ds = ADImageRefDataset(
@@ -408,7 +414,7 @@ def predict_and_evaluate_bce(
     results_path,
     log_path,
     generate_heatmaps=False,
-    device=1,
+    device=0,
     on_train=False,
     data_dir_path: str = None,
     no_trainer: bool = False,
@@ -480,23 +486,23 @@ def predict_and_evaluate_bce(
         ds=loader.dataset,
     )
 
-    # # # Compute ROC_AUC score and PR_AUC score
-    # roc_auc = roc_auc_score(labels, anomaly_scores)
-    # pr_auc = average_precision_score(labels, anomaly_scores)
-    # print(f"ROC_AUC: {roc_auc:.4f} - PR_AUC: {pr_auc:.4f}")
-    # # Compute precision-recall curve
-    # precision, recall, _ = precision_recall_curve(labels, anomaly_scores)
-    # # Compute ROC curve
-    # fpr, tpr, _ = roc_curve(labels, anomaly_scores)
+    # Compute ROC_AUC score and PR_AUC score
+    roc_auc = roc_auc_score(labels, anomaly_scores)
+    pr_auc = average_precision_score(labels, anomaly_scores)
+    print(f"ROC_AUC: {roc_auc:.4f} - PR_AUC: {pr_auc:.4f}")
+    # Compute precision-recall curve
+    precision, recall, _ = precision_recall_curve(labels, anomaly_scores)
+    # Compute ROC curve
+    fpr, tpr, _ = roc_curve(labels, anomaly_scores)
 
     # Save results to a json file
     results = {
-        # "roc_auc": roc_auc,
-        # "pr_auc": pr_auc,
-        # "precision": precision.tolist(),
-        # "recall": recall.tolist(),
-        # "fpr": fpr.tolist(),
-        # "tpr": tpr.tolist(),
+        "roc_auc": roc_auc,
+        "pr_auc": pr_auc,
+        "precision": precision.tolist(),
+        "recall": recall.tolist(),
+        "fpr": fpr.tolist(),
+        "tpr": tpr.tolist(),
         "all_scores": anomaly_scores.tolist(),
         "all_anomaly_scores": outputs.tolist(),
         "all_labels": labels,
@@ -516,7 +522,7 @@ def predict_and_evaluate_hsc(
     results_path,
     log_path,
     generate_heatmaps=False,
-    device=1,
+    device=0,
     on_train=False,
     data_dir_path: str = None,
     no_trainer: bool = False,

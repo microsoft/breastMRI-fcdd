@@ -49,6 +49,7 @@ data
 venv
 dist
 python/fcdd/post
+python/preprocessing
 
 # build
 build

@@ -47,7 +47,7 @@ For $HSC$, the Hypersphere Classification loss, our non-explainable anomaly dete
 
     python run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_task0_cv_0 --net CNN224_CROP --workers 6 --it 5 --epochs 200 --batch-size 32 --blur-heatmaps --objective hsc --logdir-suffix task0_hsc --gpu 0
 
-Finally, we have the model variation $FCDD_Symmetric$. This model is a variation of $FCDD$ that uses a reference image for each training image. The mapping between the actual image and the reference image is included in the data directory in the .csv files 'train_ref.csv' and 'test_ref.csv'. Here, each breast has as reference the contralateral breast when possible (contra lateral breast is benign). Otherwise, the reference breast is randomly selected from a benign breast in the dataset withou data leakage.
+Finally, we have the model variation $FCDD_Symmetric$. This model is a variation of $FCDD$ that uses a reference image for each training image. The mapping between the actual image and the reference image is included in the data directory in the .csv files 'train_ref.csv' and 'test_ref.csv'. Here, each breast has as reference the contralateral breast when possible (contra lateral breast is non malignant). Otherwise, the reference breast is randomly selected from a benign breast in the dataset without data leakage.
 
 In this training command is:
 
@@ -100,28 +100,52 @@ The actual log data consists of:
 
 ## Performing Inference and Generating Heatmaps
 
-Once the model is trained, is very easy to point to a particular results folder and load the model snapshot file ('*.pt') to perform inference. The functions in 'python/fcdd/runners/predictor.py' can run predictions for specific models. For FCDD, is sufficient to run:
+Once the model is trained, you can easily perform inference using the unified prediction script. The script automatically loads the appropriate model snapshot and generates predictions along with heatmaps.
 
-    predict_and_evaluate(
-        results_path=results_path, log_path=target_path, on_train=False
-    )
+### Basic Usage
 
-Where 'results_path' is the path to the results folder (specific model and iteration) and 'log_path' is the path to the target folder where the results will be saved. The 'on_train' flag is used to indicate if the predictions are to be made on the training set or the test set. The test set is defined by the config.txt file in the results folder. This function will return the predicted score and other metrics, along with a 'trainer' object that can be used to generate heatmaps. $Important$: The order of files in the ouptut results changes compared to the alphanumeric order of the files in the input folder, see example scripts below to handle this.
+To run predictions with default settings:
 
-The heatmaps can be generated using the 'generate_heatmaps' method in the trainer object. The heatmaps will be saved in the 'log_path' folder, both a random sample of heatmaps and heatmaps for specific indices can be generated. For example, for FCDD heatmaps, the following method can be used:
+    python runners/predict_custom.py --model fcdd --task 1
 
-    trainer.heatmap_generation(
-        labels = results_test["all_labels"], # All labels
-        ascores = results_test["all_upsampled"], # All model predicted scores
-        imgs = results_test["all_images"], # All images
-        name="example_fig", # Name of the figure
-        specific_idx=([2948, 3061, 2851, 2924, 2860, 891, 1991], [67, 49, 459, 38, 59, 17, 3298]), # In addition to a random sample, the model will predict specific indices in the image list
-    )
+### Available Models and Tasks
 
+The script supports four different models:
+- `fcdd`: Fully Convolutional Data Description
+- `bce`: Binary Cross Entropy baseline
+- `hsc`: Hypersphere Classification
+- `fcdd_ref`: FCDD with reference images
 
-Examples for inference and heatmap generation for each model are presented in:
+And two tasks:
+- `task 1`: Balanced detection
+- `task 2`: Imbalanced detection
 
-    python/fcdd/runners/run_predictions_fcdd_hmap.py
-    python/fcdd/runners/run_predictions_bce_hmap.py
-    python/fcdd/runners/run_predictions_hsc_hmap.py
-    python/fcdd/runners/run_predictions_fcdd_ref_hmap.py
+### Command Examples
+
+For FCDD on Task 1 (Balanced detection):
+
+    python runners/predict_custom.py --model fcdd --task 1
+
+For BCE on Task 2 (Imbalanced detection):
+
+    python runners/predict_custom.py --model bce --task 2
+
+For HSC with custom paths:
+
+    python runners/predict_custom.py --model hsc --task 1 --snapshot_path /path/to/model/snapshot --output_dir /path/to/output
+
+### Command Arguments
+
+- `--model`: Model type (`fcdd`, `bce`, `hsc`, `fcdd_ref`)
+- `--task`: Task number (1 or 2)
+- `--snapshot_path`: Custom path to model snapshot directory (optional)
+- `--output_dir`: Custom output directory for results (optional)
+- `--device`: GPU device number (default: 0)
+
+### Output
+
+The script generates:
+- **predictions_results.json**: Contains model predictions, scores, labels, and metrics (ROC AUC, PR AUC)
+- **Heatmap images**: Anomaly heatmaps for each image in the test set, saved in the output directory. Heatmaps are locally and globally normalized.
+
+The predictions are automatically saved and the file paths are correctly mapped to handle any reordering that occurs during data processing.
