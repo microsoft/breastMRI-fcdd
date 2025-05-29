@@ -63,9 +63,9 @@ datadir/
 
 In the case of the test set, the ground truth labels are inferred from folder structure. If there are no ground truth labels, samples to predict can be place in the `normal` folder.
 
-## 🧪 Usage
+## 🧪 Basic Usage
 
-To train a model, run from the `python/fcdd` directory:
+To train a model, run the following commands:
 
     conda activate fcdd
     cd python/fcdd
@@ -76,10 +76,38 @@ To train a model, run from the `python/fcdd` directory:
 
 For semi-supervised training (as proposed in the paper), place anomalous breast images or cancer cases in the `train/breast_img/anomalous/` folder.
 
-You can customize training parameters such as network architecture, epochs, batch size, and more. For full options:
+You can customize training parameters such as network architecture, loss, epochs, batch size, and more. For all options:
 
     python runners/run_custom.py --help
 
+To perform inference, you can use:
+
+    python runners/predict_custom.py --model model_name
+
+**Arguments**
+- `--model`: Specifies the model type to use for prediction. Options are:
+  - `fcdd`: Fully Convolutional Data Description model.
+  - `bce`: Binary Cross-Entropy model.
+  - `hsc`: Hybrid Supervised Clustering model.
+  - `fcdd_ref`: Reference-based FCDD model.
+  Default: `fcdd`. Modify if your model has a different name.
+
+- `--task`: Task number to run predictions for. Options are:
+  - `1`: Task 1. Models validated on balanced detection (similar proportions of normal and anomalous cases). Not relevant unless using public checkpoints.
+  - `2`: Task 2. Models validated on imbalanced detection (many more normal cases than anomalous cases). Not relevant unless using public checkpoints.
+  Default: `1`.
+
+- `--snapshot_path`: Path to the directory containing the model snapshot. If not provided, a default path is used based on the selected model and task. Directory should have a config.txt file with model arguments and a snapshot.pt file with the model weights.
+
+- `--output_dir`: Directory to save the prediction results. If not specified, results are saved to a default directory under `../../data/results`.
+
+- `--device`: GPU device number to use for inference. Default: `0`.
+
+**Inference Output:**
+- `predictions_results.json`: Model predictions, scores, labels, and metrics (ROC AUC, PR AUC)
+- Heatmap images: Anomaly heatmaps for each test image, saved in the output directory.
+
+File paths are automatically mapped to handle any reordering during data processing.
 
 ## 🏃 Training Examples
 
@@ -138,27 +166,7 @@ After training, results (scores, metrics, plots, snapshots, and heatmaps) are st
 
 </details>
 
-## 🧠 Performing Inference and Generating Anomaly Heatmaps
-
-After training, use the unified prediction script to generate predictions and heatmaps:
-
-    python runners/predict_custom.py --model fcdd --task 1
-
-**Supported models:** `fcdd`, `bce`, `hsc`, `fcdd_ref`
-**Supported tasks:** `1` (Balanced), `2` (Imbalanced)
-
-Additional arguments:
-- `--snapshot_path`: Path to model checkpoint (optional)
-- `--output_dir`: Output directory for results (optional)
-- `--device`: GPU device (default: 0)
-
-**Output:**
-- `predictions_results.json`: Model predictions, scores, labels, and metrics (ROC AUC, PR AUC)
-- Heatmap images: Anomaly heatmaps for each test image, saved in the output directory (both local and global normalization)
-
-File paths are automatically mapped to handle any reordering during data processing.
-
-## 💻 Demo of Predictions and Anomaly Heatmaps
+## 💻 Demo: Predictions and Anomaly Heatmaps
 
 Model checkpoints were trained on one of the cross-validation splits of the *model development dataset*, as described in the publication. This private dataset is IRB-Approved and owned by University of Washington and Fred Hutchinson Cancer Research Center, as shared just for demonstration purposes. The model checkpoints are not intended for clinical use and should not be used for patient care.
 
@@ -169,6 +177,8 @@ Download model checkpoints (fcdd, hsc, bce) and example data from zenodo:
 
 Run the prediction script for FCDD with task 2:
 
+    conda activate fcdd
+    cd python/fcdd
     python runners/predict_custom.py --model fcdd --task 2
 
 Run the prediction script for BCE with task 2:
@@ -179,6 +189,8 @@ Run the prediction script for HSC with task 2:
 
     python runners/predict_custom.py --model hsc --task 2
 
+Alternative, you can run all six checkpoints with:
 
+    bash test.sh
 
 
