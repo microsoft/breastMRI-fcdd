@@ -157,6 +157,8 @@ File paths are automatically mapped to handle any reordering during data process
 
 ## 💻 Demo of Predictions and Anomaly Heatmaps
 
+Model checkpoints were trained on of the cross-validation splits of the "model development" dataset in the paper. This private dataset is IRB-Approved and owned by University of Washington and Fred Hutchinson Cancer Research Center.
+
 Download demo of the trained models and sample data from zenodo:
 
     wget https://zenodo.org/record/{TO_BE_ADDED}/files/fcdd_demo.zip
