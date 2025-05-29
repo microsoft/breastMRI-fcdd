@@ -332,12 +332,3 @@ class DefaultPascalvocConfig(DefaultConfig):
             quantile=0.99,
         )
         return parser
-
-
-### Query example
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdshared/FH/data/datasets_no_known/ --workers 0 --it 1 --objective bce -n VGG_BCE --epochs 1 --batch-size 32 --blur-heatmaps
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdshared/FH/data/datasets_no_known/ --workers 0 --it 3 --epochs 100 --batch-size 32 --blur-heatmaps
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdshared/FH/data/datasets_no_known/ --workers 0 --it 3 --epochs 100 --batch-size 32 --objective hsc -n CNN224_VGG_NOPT --blur-heatmaps
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_rk --workers 0 --it 1 --objective fcdd -n CNN224_VGG_NOPT --epochs 1 --batch-size 32 --blur-heatmaps --logdir-suffix test --gpu 1
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_rk --workers 0 --it 3 --objective fcdd -n FCDD_CNN224_VGG_NOPT --epochs 100 --batch-size 32 --blur-heatmaps --logdir-suffix NPT_pat_rk_aug1 --gpu 1
-# python runners/run_custom.py --supervise-mode other --datadir /home/felipeoviedoperhavec/ssdprivate/FH/data/fccd_data_patient_rk --workers 0 --it 3 --objective bce -n VGG_BCE --epochs 100 --batch-size 32 --blur-heatmaps --logdir-suffix bce_pat_rk_aug1

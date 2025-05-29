@@ -46,7 +46,6 @@ class CustomConfig(DefaultConfig):
             dataset="ref",
             net="FCDD_REF_CNN224_VGG_F",
             supervise_mode="other",
-            # 'fcddrefs_symm for the symmetric version
             # 'fcddrefs' assumes that the second sample (reference) is always normal
             objective="fcddrefs",
         )
