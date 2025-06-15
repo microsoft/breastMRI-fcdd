@@ -449,7 +449,6 @@ def predict_and_evaluate_bce(
 
     # Send trainer net to device 1 using .to
     trainer.net.to(device).eval()
-    #trainer.net.eval()
 
     # # Make predictions
     all_fnames = [i[0].split("/")[-1].split(".")[0] for i in d_test.dataset.imgs]

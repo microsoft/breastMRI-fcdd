@@ -194,7 +194,6 @@ class BaseNet(torch.nn.Module, ABC):
         if absolute:
             heatmaps = heatmaps.abs()
         heatmaps = heatmaps.sum(1, keepdim=True)
-        # heatmaps /= heatmaps.sum((2, 3), keepdim=True)
         return heatmaps.detach()
 
 

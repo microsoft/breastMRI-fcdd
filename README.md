@@ -75,6 +75,8 @@ In the case of the test set, the ground truth labels are inferred from folder st
 
 ## 🧪 Basic Usage
 
+So a complete example, see the [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps) section.
+
 To train a model, run the following commands:
 
     conda activate fcdd
@@ -90,7 +92,7 @@ You can customize training parameters such as network architecture, loss, epochs
 
     python runners/run_custom.py --help
 
-To perform inference, you can use:
+To perform inference, run:
 
     python runners/predict_custom.py --model model_name
 
@@ -118,9 +120,6 @@ To perform inference, you can use:
 - Heatmap images: Anomaly heatmaps for each test image, saved in the output directory.
 
 File paths are automatically mapped to handle any reordering during data processing.
-
-To try out model predictions on sample data, see the [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps) section.
-
 
 ## 🏃 Training Examples
 <details>

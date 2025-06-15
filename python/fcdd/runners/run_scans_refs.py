@@ -24,17 +24,17 @@ class CustomConfig(DefaultConfig):
             default=None,
             help="Run only training sessions for some of the classes being nominal.",
         )
-        # parser.add_argument(
-        #     "--ground-truth-maps",
-        #     "-gtms",
-        #     action="store_true",
-        #     help="Activates utilization of binary ground-truth maps for training and/or testing. "
-        #     "This requires additional dataset folders `data/custom/train_maps/classX/...` "
-        #     "and/or `data/custom/test_maps/classX/...` where the corresponding maps are placed. "
-        #     "The ground-truth maps need to be binary; i.e., need to be in {0, 255}^{1 x h x w}, "
-        #     "where 255 marks anomalous regions. "
-        #     "For more details see :class:`fcdd.datasets.image_folder_gtms.ADImageFolderDatasetGTM`.",
-        # )
+        parser.add_argument(
+            "--ground-truth-maps",
+            "-gtms",
+            action="store_true",
+            help="Activates utilization of binary ground-truth maps for training and/or testing. "
+            "This requires additional dataset folders `data/custom/train_maps/classX/...` "
+            "and/or `data/custom/test_maps/classX/...` where the corresponding maps are placed. "
+            "The ground-truth maps need to be binary; i.e., need to be in {0, 255}^{1 x h x w}, "
+            "where 255 marks anomalous regions. "
+            "For more details see :class:`fcdd.datasets.image_folder_gtms.ADImageFolderDatasetGTM`.",
+        )
         parser.add_argument(
             "--gpu",
             type=str,

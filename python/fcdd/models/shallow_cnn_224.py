@@ -37,8 +37,6 @@ class CNN224_RESNET_NOPT(BaseNet):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
         self.model = torchvision.models.resnet50(False)
-        # model.classifier = model.classifier[:-3]
-        # self.resnet = model
 
     def forward(self, x, ad=True):
         x = self.model(x)
@@ -290,7 +288,7 @@ class AE224(BaseNet):
 
 
 class CNN224_CROP(BaseNet):
-    fcdd_cls = FCDD_CNN224_VGG_NOPT  # Not sure to add this or not.
+    fcdd_cls = FCDD_CNN224_VGG_NOPT
 
     # VGG_11BN based net with randomly initialized weights (pytorch default).
     def __init__(self, in_shape, **kwargs):

@@ -14,7 +14,7 @@ from fcdd.models import load_nets
 from fcdd.models.bases import BaseNet
 from fcdd.util.logging import Logger
 
-OBJECTIVES = ("fcdd", "hsc", "ae", "bce", "fcddrefs", "fcddrefs_symmetric")
+OBJECTIVES = ("fcdd", "hsc", "bce", "fcddrefs", "fcddrefs_symmetric")
 SUPERVISE_MODES = (
     "unsupervised",
     "other",

@@ -257,45 +257,6 @@ class DefaultFmnistConfig(DefaultConfig):
         )
         return parser
 
-
-class DefaultCifar10Config(DefaultConfig):
-    def __call__(self, parser: ArgumentParser) -> ArgumentParser:
-        parser = super().__call__(parser)
-        parser.set_defaults(
-            batch_size=20,
-            acc_batches=10,
-            epochs=600,
-            optimizer_type="adam",
-            scheduler_type="milestones",
-            lr_sched_param=[0.1, 400, 500],
-            dataset="cifar10",
-            net="FCDD_CNN32_LW3K",
-            quantile=0.85,
-            noise_mode="cifar100",
-            gauss_std=1.2,
-        )
-        return parser
-
-
-class DefaultMvtecConfig(DefaultConfig):
-    def __call__(self, parser: ArgumentParser) -> ArgumentParser:
-        parser = super().__call__(parser)
-        parser.set_defaults(
-            batch_size=16,
-            acc_batches=8,
-            supervise_mode="malformed_normal",
-            gauss_std=12,
-            weight_decay=1e-4,
-            epochs=200,
-            preproc="lcnaug1",
-            quantile=0.99,
-            net="FCDD_CNN224_VGG_F",
-            dataset="mvtec",
-            noise_mode="confetti",
-        )
-        return parser
-
-
 class DefaultImagenetConfig(DefaultConfig):
     def __call__(self, parser: ArgumentParser) -> ArgumentParser:
         parser = super().__call__(parser)
@@ -313,22 +274,3 @@ class DefaultImagenetConfig(DefaultConfig):
         )
         return parser
 
-
-class DefaultPascalvocConfig(DefaultConfig):
-    def __call__(self, parser: ArgumentParser):
-        parser = super().__call__(parser)
-        parser.set_defaults(
-            batch_size=20,
-            acc_batches=10,
-            epochs=600,
-            optimizer_type="adam",
-            scheduler_type="milestones",
-            lr_sched_param=[0.1, 400, 500],
-            dataset="pascalvoc",
-            noise_mode="imagenet",
-            net="FCDD_CNN224_VGG_NOPT",
-            nominal_label=1,
-            gauss_std=8,
-            quantile=0.99,
-        )
-        return parser

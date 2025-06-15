@@ -177,8 +177,6 @@ class PathsMetaFileImageNet(MyImageFolder):
 
 class MyImageNet(PathsMetaFileImageNet):
     """ ImageNet torch dataset extention, s.t. target_transform and online supervisor is applied """
-    # s = len([t for t in self.test_loader.dataset.dataset.targets if not np.isnan(t)])
-    # order = np.random.choice(list(range(s)), replace=False, size=s)
     fixed_random_order = np.load(pt.join(ROOT, 'datasets', 'confs', 'imagenet30_test_random_order.npy'))
 
     def __init__(self, root: str, supervise_mode: str, raw_shape: Tuple[int, int, int],

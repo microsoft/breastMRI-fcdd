@@ -13,7 +13,7 @@ from fcdd.models.fcdd_cnn_224 import FCDD_CNN224, FCDD_CNN224_VGG, FCDD_CNN224_V
 
 
 class VGG_BCE(BaseNet):
-    fcdd_cls = FCDD_CNN224_VGG_NOPT  # Not sure to add this or not.
+    fcdd_cls = FCDD_CNN224_VGG_NOPT
 
     # VGG_11BN based net with randomly initialized weights (pytorch default).
     def __init__(self, in_shape, **kwargs):
@@ -31,7 +31,7 @@ class VGG_BCE(BaseNet):
 
 
 class VGG_BCE_1000(BaseNet):
-    fcdd_cls = FCDD_CNN224_VGG_NOPT  # Not sure to add this or not.
+    fcdd_cls = FCDD_CNN224_VGG_NOPT
 
     # VGG_11BN based net with randomly initialized weights (pytorch default).
     def __init__(self, in_shape, **kwargs):
@@ -49,7 +49,7 @@ class VGG_BCE_1000(BaseNet):
 
 
 class VGG_BCE_CROP(BaseNet):
-    fcdd_cls = FCDD_CNN224_VGG_NOPT  # Not sure to add this or not.
+    fcdd_cls = FCDD_CNN224_VGG_NOPT
 
     # VGG_11BN based net with randomly initialized weights (pytorch default).
     def __init__(self, in_shape, **kwargs):
@@ -60,12 +60,6 @@ class VGG_BCE_CROP(BaseNet):
         self.features = nn.Sequential(*list(self.core.children())[:-8])
         self.features_n = nn.Sequential(
             self.features,
-            # nn.Conv2d(512, 512, 3, 1, 1),
-            # nn.BatchNorm2d(512),
-            # nn.ReLU(True),
-            # nn.Conv2d(512, 512, 3, 1, 1),
-            # nn.BatchNorm2d(512),
-            # nn.ReLU(True),
             nn.MaxPool2d(2, 2),
             nn.AdaptiveAvgPool2d(7),
             nn.Flatten(1),

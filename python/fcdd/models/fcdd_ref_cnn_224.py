@@ -131,9 +131,6 @@ class FCDD_REF_CNN224_VGG(FCDDNet):
         assert self.bias, "VGG net is only supported with bias atm!"
         self.model = FCDD_CNN224_VGG(in_shape, out_channels=128, **kwargs)
         self.ref_model = CNN224_VGG(in_shape, **kwargs)
-        # self.ref_model.vgg.classifier.append(nn.ReLU())
-        # self.ref_model.vgg.classifier.append(nn.Dropout(p=0.5))
-        # self.ref_model.vgg.classifier.append(nn.Linear(4096, 128))
         self.ref_model.vgg.classifier.add_module("relu", nn.ReLU())
         self.ref_model.vgg.classifier.add_module("dropout", nn.Dropout(p=0.5))
         self.ref_model.vgg.classifier.add_module("fc", nn.Linear(4096, 128))

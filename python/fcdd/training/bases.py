@@ -346,9 +346,6 @@ class BaseADTrainer(BaseTrainer):
                 err=True,
             )
             return
-        # self.heatmap_generation(
-        #     labels, anomaly_scores, imgs, gtmaps, grads, name=f"val_heatmaps_epoch{epoch}",
-        # )
         with torch.no_grad():
             sc = self.score(
                 labels, anomaly_scores, imgs, outputs, gtmaps, grads, val=True
@@ -407,27 +404,6 @@ class BaseADTrainer(BaseTrainer):
             }.
         """
         self.net = self.net.to(self.device).eval()
-
-        # self.logger.print("Test training data...", fps=False)
-        # (
-        #     labels,
-        #     loss,
-        #     anomaly_scores,
-        #     imgs,
-        #     outputs,
-        #     gtmaps,
-        #     grads,
-        #     refs,
-        # ) = self._gather_data(self.train_loader)
-        # self.heatmap_generation(
-        #     labels,
-        #     anomaly_scores,
-        #     imgs,
-        #     gtmaps,
-        #     grads,
-        #     name="train_heatmaps",
-        #     subdir=subdir,
-        # )
 
         self.logger.print("Test test data... (only)", fps=False)
         (
@@ -619,7 +595,7 @@ class BaseADTrainer(BaseTrainer):
             shape[1] = 1  # Set channel dimension to 1
             grads = torch.zeros(shape, dtype=inputs.dtype, device=inputs.device)
             print("Issue computing gradients in grad_forward pass. Setting grads as 0")
-            # Print shape of loss and inputs
+
             print(f"Loss shape: {loss.shape}")
             print(f"Inputs shape: {inputs.shape}")
         inputs.requires_grad = False
@@ -795,8 +771,8 @@ class BaseADTrainer(BaseTrainer):
                 labels,
             )
 
-        # Concise paper picture: Samples grow from most nominal to most anomalous (equidistant).
-        # 2 versions: with local normalization and semi-global normalization
+        # Manuscript figure: Samples grow from most nominal to most anomalous (equidistant).
+        # Two versions: with local normalization and semi-global normalization
         if "train" not in name:
             res = (
                 self.resdown * 2
