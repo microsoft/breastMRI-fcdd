@@ -51,13 +51,13 @@ Organize your data directory as follows (relative to your chosen `datadir`, defa
 ```
 datadir/
   custom/
-    train/
-      breast_img/
-        normal/
+    train/           
+      breast_img/             
+        normal/              
           img1.tiff
           img2.tiff
           ...
-        anomalous/           # (optional, for semi-supervised)
+        anomalous/   # (optional, for semi-supervised)
           imgX.tiff
     test/
       breast_img/
@@ -71,7 +71,7 @@ datadir/
 
 `normal` is the majority class, in this case the non-cancerous breast images. `anomalous` is the minority class, in this case the cancerous breast images.
 
-In the case of the test set, the ground truth labels are inferred from folder structure. If there are no ground truth labels, samples to predict can be place in the `normal` folder.
+In the case of the test set, the ground truth labels are inferred from folder structure. If there are no ground truth labels, samples to predict can be place in the `normal` folder. In inference, the model expects also the `train` folder with at least one image in the `normal` and `anomalous` folders, use a placeholder image if necessary. This does not affect the predictions, but is required for the model to run.
 
 ## 🧪 Basic Usage
 
