@@ -1,7 +1,6 @@
-
 # FCDD - Explainable Anomaly Detection for Breast MRI Cancer Screening
 
-This is an implementation of the models described in the paper **"Cancer detection in breast MRI screening via explainable artificial intelligence anomaly detection"**.
+This is an implementation of the models described in **"Cancer detection in breast MRI screening via explainable artificial intelligence anomaly detection"**.
 
 FCDD enables both high-performance anomaly detection and anomaly explanations in the form of heatmaps, with emphasis on extreme class imbalance. The original FCDD implementation is available [here](https://github.com/liznerski/fcdd).
 
@@ -12,10 +11,11 @@ FCDD enables both high-performance anomaly detection and anomaly explanations in
 - [📄 Citation](#-citation)
 - [📦 Installation](#-installation)
 - [📁 Dataset Structure](#-dataset-structure)
-- [🧪 Basic Usage](#-basic-usage)
+- [🧪 Usage](#-usage)
 - [🏃 Training Examples](#-training-examples)
 - [🔬 Explanation of Log Data after Training](#-explanation-of-log-data-after-training)
-- [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps)
+- [💻 Quick Demo: Predictions and Anomaly Heatmaps](#-quick-demo-predictions-and-anomaly-heatmaps)
+- [Disclaimer / Notices](#disclaimer--notices)
 
 ## 📄 Citation
 
@@ -24,7 +24,7 @@ If you use this code in your research, please cite our paper:
 ```
 @article{oviedo2025cancer,
 title={Cancer detection in breast MRI screening via explainable artificial intelligence anomaly detection},
-author={Oviedo, Felipe and Kazerouni, Anum S and Liznerski, Philipp and Xu, Yixi and Hirano, Michael and Vandermeulen, Robert A and Kloft, Marius and Blum, Elyse and Alessio, Adam M and Li, Christopher I and Weeks, William B and Dodhia, Rahul and Ferres, Juan Lavista and Rahbar, Habib and Partridge, Savannah C},
+author={Felipe Oviedo, Anum S. Kazerouni, Philipp Liznerski, Yixi Xu, Michael Hirano, Robert A. Vandermeulen, Marius Kloft, Elyse Blum, Adam M Alessio, Christopher I. Li, William B Weeks, Rahul Dodhia, Juan Lavista Ferres, Habib Rahbar, Savannah C. Partridge},
 journal={Radiology},
 year={2025},
 publisher={Radiological Society of North America}
@@ -73,9 +73,9 @@ datadir/
 
 In the case of the test set, the ground truth labels are inferred from folder structure. If there are no ground truth labels, samples to predict can be place in the `normal` folder. In inference, the model expects also the `train` folder with at least one image in the `normal` and `anomalous` folders, use a placeholder image if necessary. This does not affect the predictions, but is required for the model to run.
 
-## 🧪 Basic Usage
+## 🧪 Usage
 
-So a complete example, see the [💻 Demo: Predictions and Anomaly Heatmaps](#-demo-predictions-and-anomaly-heatmaps) section.
+These are general usage instructions. For a complete example, see the [💻 Quick Demo: Predictions and Anomaly Heatmaps](#-quick-demo-predictions-and-anomaly-heatmaps) section.
 
 To train a model, run the following commands:
 
@@ -177,31 +177,35 @@ After training, results (scores, metrics, plots, snapshots, and heatmaps) are st
 
 </details>
 
-## 💻 Demo: Predictions and Anomaly Heatmaps
+## 💻 Quick Demo: Predictions and Anomaly Heatmaps
 
-Model checkpoints were trained on one of the cross-validation splits of the *model development dataset*, as described in the publication. This private dataset is IRB-Approved and owned by University of Washington and Fred Hutchinson Cancer Research Center, as shared just for demonstration purposes. The model checkpoints are not intended for clinical use and should not be used for patient care.
+Model checkpoints were trained on one of the cross-validation splits of the *model development dataset*, as described in the publication. The model checkpoints are just for demonstration purposes and not intended for clinical use, as mentioned in [Disclaimer / Notices](#disclaimer--notices).
 
 Download model checkpoints (fcdd, hsc, bce) and example data from zenodo:
 
     wget https://zenodo.org/record/{TO_BE_ADDED}/files/fcdd_demo.zip
     unzip fcdd_demo.zip
 
-Run the prediction script for FCDD with task 2:
+Run the prediction script for FCDD, for example for the checkpoint trained for task 2:
 
     conda activate fcdd
     cd python/fcdd
     python runners/predict_custom.py --model fcdd --task 2
 
-Run the prediction script for BCE with task 2:
+Similarly, run the prediction script for BCE and HSC losses (with task 2):
 
     python runners/predict_custom.py --model bce --task 2
-
-Run the prediction script for HSC with task 2:
-
     python runners/predict_custom.py --model hsc --task 2
 
 Alternative, you can run all six checkpoints with:
 
     bash test.sh
+
+
+## Disclaimer / Notices 
+
+**Disclaimer:** This code, model and sample data are intended for research and model development exploration. The models, code and examples are not designed or intended to be deployed in clinical settings as-is nor for use in the diagnosis or treatment of any health or medical condition, and the individual models' performances for such purposes have not been established. You bear sole responsibility and liability for any use of the models, code and examples, including verification of outputs and incorporation into any product or service intended for a medical purpose or to inform clinical decision-making, compliance with applicable healthcare laws and regulations, and obtaining any necessary clearances or approvals.
+
+**Trademarks**: This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow Microsoft's Trademark & Brand Guidelines. Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
 
 
