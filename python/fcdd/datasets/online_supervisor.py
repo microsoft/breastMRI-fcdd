@@ -10,10 +10,10 @@ from typing import List, Tuple
 import numpy as np
 import torch
 from fcdd.datasets.bases import TorchvisionDataset
-from fcdd.datasets.outlier_exposure.cifar100 import OECifar100
-from fcdd.datasets.outlier_exposure.emnist import OEEMNIST
+#from fcdd.datasets.outlier_exposure.cifar100 import OECifar100
+#from fcdd.datasets.outlier_exposure.emnist import OEEMNIST
 from fcdd.datasets.outlier_exposure.imagenet import OEImageNet, OEImageNet22k
-from fcdd.datasets.outlier_exposure.mvtec import OEMvTec
+#from fcdd.datasets.outlier_exposure.mvtec import OEMvTec
 from fcdd.datasets.preprocessing import ImgGTTargetTransform
 
 
@@ -54,34 +54,6 @@ class OnlineSupervisor(ImgGTTargetTransform):
                 OEImageNet22k(
                     (1, ) + ds.raw_shape, limit_var=oe_limit, logger=ds.logger,
                     root=ds.root
-                ).data_loader()
-            )
-        elif noise_mode == 'cifar100':
-            self.noise_sampler = cycle(
-                OECifar100(
-                    (1, ) + ds.raw_shape, limit_var=oe_limit,
-                    root=ds.root
-                ).data_loader(),
-            )
-        elif noise_mode == 'emnist':
-            self.noise_sampler = cycle(
-                OEEMNIST(
-                    (1, ) + ds.raw_shape, limit_var=oe_limit,
-                    root=ds.root
-                ).data_loader()
-            )
-        elif noise_mode == 'mvtec':
-            self.noise_sampler = cycle(
-                OEMvTec(
-                    (1, ) + ds.raw_shape, ds.normal_classes, limit_var=oe_limit,
-                    logger=ds.logger, root=ds.root
-                ).data_loader()
-            )
-        elif noise_mode == 'mvtec_gt':
-            self.noise_sampler = cycle(
-                OEMvTec(
-                    (1, ) + ds.raw_shape, ds.normal_classes, limit_var=oe_limit,
-                    logger=ds.logger, gt=True, root=ds.root
                 ).data_loader()
             )
 

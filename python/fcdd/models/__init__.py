@@ -6,12 +6,12 @@ import inspect
 import sys
 from typing import List, Dict, Tuple
 
-from fcdd.models.shallow_cnn_28 import *
-from fcdd.models.shallow_cnn_32 import *
+#from fcdd.models.shallow_cnn_28 import *
+#from fcdd.models.shallow_cnn_32 import *
 from fcdd.models.shallow_cnn_224 import *
 from fcdd.models.fcdd_ref_cnn_224 import *
-from fcdd.models.fcdd_cnn_28 import *
-from fcdd.models.fcdd_cnn_32 import *
+#from fcdd.models.fcdd_cnn_28 import *
+#from fcdd.models.fcdd_cnn_32 import *
 from fcdd.models.fcdd_cnn_224 import *
 from fcdd.models.bce_224 import *
 

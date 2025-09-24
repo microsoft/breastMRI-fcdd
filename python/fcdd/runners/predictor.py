@@ -34,6 +34,9 @@ from fcdd.training.fcdd_refs import FCDDRefsTrainer
 from fcdd.models.fcdd_ref_cnn_224 import FCDD_REF_CNN224_VGG_NOPT
 from fcdd.datasets.image_folder_refs import ADImageRefDataset
 
+def _dev(device):
+    use_cuda = isinstance(device, int) and device >= 0 and torch.cuda.is_available()
+    return f"cuda:{device}" if use_cuda else "cpu"
 
 def reorder(
     labels: List[int],
