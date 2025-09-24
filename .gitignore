@@ -55,3 +55,5 @@ add_copy.py
 
 # build
 build
+
+.venv
