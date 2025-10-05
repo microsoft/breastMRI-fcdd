@@ -33,12 +33,18 @@ publisher={Radiological Society of North America}
 
 ## 📦 Installation
 
-To install FCDD, run the following commands:
+We recommend a Conda-first setup for Pythorch. This avoids ABI mismatches like operator torchvision::nms does not exist.
 
-    conda create --name fcdd python=3.9
+Files used here live in python/ folder: python/environment.yml (GPU); python/environment-cpu.yml (CPU); python/requirements.txt (core-only)
+
+To install FCDD, run the following commands:
+    cd python 
+    # Choose one (GPU / CPU)
+    conda env create -f environment.yml # creates with name "fcdd" change if needed
+    # conda env create -f environment-cpu.yml
     conda activate fcdd
-    cd python
-    pip install .
+    pip install -r requirements.txt
+    pip install -e . --no-deps
 
 After installation, check that CUDA is detected by PyTorch:
 

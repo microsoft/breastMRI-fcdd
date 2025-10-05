@@ -1,0 +1,9 @@
+
+# local data/checkpoints
+*.pt
+*.pth
+__pycache__/
+*.egg-info/
+/build/
+/dist/
+/data/

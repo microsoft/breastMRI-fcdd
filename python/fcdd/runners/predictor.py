@@ -35,8 +35,52 @@ from fcdd.models.fcdd_ref_cnn_224 import FCDD_REF_CNN224_VGG_NOPT
 from fcdd.datasets.image_folder_refs import ADImageRefDataset
 
 def _dev(device):
-    use_cuda = isinstance(device, int) and device >= 0 and torch.cuda.is_available()
-    return f"cuda:{device}" if use_cuda else "cpu"
+    if isinstance(device,int):
+        if device < 0:
+            return "cpu"
+        if torch.cuda.is_available():
+            n = torch.cuda.device_count()
+            if n > 0 and device < n:
+                return f"cuda:{device}"
+            return "cuda:0"
+        return "cpu"
+    return device 
+
+def _resolve_path(p: str, base_dir: str) -> str:
+    if os.path.isabs(p):
+        return p
+
+    base_dir = os.path.abspath(base_dir)
+
+    cand1 = os.path.abspath(os.path.join(base_dir, p))
+    if os.path.exists(cand1):
+        return cand1
+
+    norm_p = os.path.normpath(p)
+    parts = norm_p.split(os.sep)
+    if "data" in parts:
+        tail = parts[parts.index("data") + 1 :]
+        cur = base_dir
+        while True:
+            if os.path.basename(cur) == "data":
+                cand2 = os.path.join(cur, *tail) if tail else cur
+                cand2 = os.path.abspath(cand2)
+                if os.path.exists(cand2):
+                    return cand2
+                break
+            parent = os.path.dirname(cur)
+            if parent == cur:
+                break
+            cur = parent
+
+    raise FileNotFoundError(
+        f"Could not resolve datadir '{p}' from base '{base_dir}'. "
+        f"Tried: {cand1} and nearest-‘data’ anchoring. "
+        f"Pass --datadir with an absolute path if needed."
+    )
+
+def _asbool(x) -> bool:
+    return str(x).strip().lower() in ("1", "true", "yes", "y", "on")
 
 def reorder(
     labels: List[int],
@@ -91,7 +135,7 @@ def load_config(results_path):
 def load_model(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
     if config["net"] == "FCDD_CNN224_VGG_NOPT":
-        net = FCDD_CNN224_VGG_NOPT((3, 224, 224), bias=True).cuda(device=device)
+        net = FCDD_CNN224_VGG_NOPT((3, 224, 224), bias=True).to(_dev(device))
         # Load data and make predictions
         trainer = FCDDTrainer(
             net,
@@ -104,10 +148,10 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             float(config["quantile"]),
             64,
             blur_heatmaps=bool(config["blur_heatmaps"]),
-            device=device,
+            device=_dev(device),
         )
     elif config["net"] == "VGG_BCE_CROP":
-        net = VGG_BCE_CROP((3, 224, 224), bias=True).cuda(device=device)
+        net = VGG_BCE_CROP((3, 224, 224), bias=True).to(_dev(device))
         # Load data and make predictions
         trainer = BCETrainer(
             net,
@@ -120,10 +164,10 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             float(config["quantile"]),
             64,
             blur_heatmaps=bool(config["blur_heatmaps"]),
-            device=device,
+            device=_dev(device),
         )
     elif config["net"] == "VGG_BCE":
-        net = VGG_BCE((3, 224, 224), bias=True).cuda(device=device)
+        net = VGG_BCE((3, 224, 224), bias=True).to(_dev(device))
         # Load data and make predictions
         trainer = BCETrainer(
             net,
@@ -136,11 +180,11 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             float(config["quantile"]),
             64,
             blur_heatmaps=bool(config["blur_heatmaps"]),
-            device=device,
+            device=_dev(device),
         )
 
     elif config["net"] == "CNN224_CROP":
-        net = CNN224_CROP((3, 224, 224), bias=True).cuda(device=device)
+        net = CNN224_CROP((3, 224, 224), bias=True).to(_dev(device))
         # Load data and make predictions
         trainer = HSCTrainer(
             net,
@@ -153,7 +197,7 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             float(config["quantile"]),
             64,
             blur_heatmaps=bool(config["blur_heatmaps"]),
-            device=device,
+            device=_dev(device),
         )
     else:
         raise NotImplementedError("Model {} is not defined yet.".format(config["net"]))
@@ -163,7 +207,7 @@ def load_model(config: dict, logger: Logger, device: int = 0):
 
 def load_model_ref(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
-    net = FCDD_REF_CNN224_VGG_NOPT((3, 224, 224), bias=True).cuda(device=device)
+    net = FCDD_REF_CNN224_VGG_NOPT((3, 224, 224), bias=True).to(_dev(device))
     # Load data and make predictions
     trainer = FCDDRefsTrainer(
         net,
@@ -176,7 +220,7 @@ def load_model_ref(config: dict, logger: Logger, device: int = 0):
         float(config["quantile"]),
         64,
         blur_heatmaps=bool(config["blur_heatmaps"]),
-        device=device,
+        device=_dev(device),
     )
 
     return trainer
@@ -198,9 +242,12 @@ def predict_and_evaluate(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
+    data_root = _resolve_path(config["datadir"], results_path)
+    print(f"[predictor] Using datadir: {data_root}")
+
     # Define Dataset
     ds = ADImageFolderDataset(
-        root=config["datadir"],
+        root=data_root,
         normal_class=int(config["normal_class"]),
         preproc=config["preproc"],
         supervise_mode=config["supervise_mode"],
@@ -234,7 +281,7 @@ def predict_and_evaluate(
 
     all_anomaly_scores, all_inputs, all_labels, all_upsampled = [], [], [], []
     for inputs, labels in loader:
-        inputs = inputs.cuda(device=device)
+        inputs = inputs.to(_dev(device))
         with torch.no_grad():
             outputs = trainer.net(inputs)
             anomaly_scores = trainer.anomaly_score(
@@ -319,9 +366,12 @@ def predict_and_evaluate_ref(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
+    data_root = _resolve_path(config["datadir"], results_path)
+    print(f"[predictor] Using datadir: {data_root}")
+    
     # Define Dataset
     ds = ADImageRefDataset(
-        root=config["datadir"],
+        root=data_root,
         normal_class=int(config["normal_class"]),
         preproc=config["preproc"],
         supervise_mode=config["supervise_mode"],
@@ -353,8 +403,8 @@ def predict_and_evaluate_ref(
 
     all_anomaly_scores, all_inputs, all_labels, all_upsampled = [], [], [], []
     for inputs, labels, refs in loader:
-        inputs = inputs.cuda(device=device)
-        refs = refs.cuda(device=device)
+        inputs = inputs.to(_dev(device))
+        refs = refs.to(_dev(device))
 
         with torch.no_grad():
             outputs, outputs_ref = trainer.net(inputs, refs)
@@ -428,9 +478,12 @@ def predict_and_evaluate_bce(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
+    data_root = _resolve_path(config["datadir"], results_path)
+    print(f"[predictor] Using datadir: {data_root}")
+    
     # Define Dataset
     ds = ADImageFolderDataset(
-        root=config["datadir"],
+        root=data_root,
         normal_class=int(config["normal_class"]),
         preproc=config["preproc"],
         supervise_mode=config["supervise_mode"],
@@ -451,7 +504,7 @@ def predict_and_evaluate_bce(
     trainer.load(results_path + "snapshot.pt")
 
     # Send trainer net to device 1 using .to
-    trainer.net.to(device).eval()
+    trainer.net.to(_dev(device)).eval()
 
     # # Make predictions
     all_fnames = [i[0].split("/")[-1].split(".")[0] for i in d_test.dataset.imgs]
@@ -535,9 +588,12 @@ def predict_and_evaluate_hsc(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
+    data_root = _resolve_path(config["datadir"], results_path)
+    print(f"[predictor] Using datadir: {data_root}")
+    
     # Define Dataset
     ds = ADImageFolderDataset(
-        root=config["datadir"],
+        root=data_root,
         normal_class=int(config["normal_class"]),
         preproc=config["preproc"],
         supervise_mode=config["supervise_mode"],

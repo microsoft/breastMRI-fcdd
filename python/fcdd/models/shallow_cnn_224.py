@@ -21,7 +21,7 @@ class CNN224_VGG_NOPT(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         model.classifier = model.classifier[:-3]
         self.vgg = model
 
@@ -36,7 +36,7 @@ class CNN224_RESNET_NOPT(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        self.model = torchvision.models.resnet50(False)
+        self.model = torchvision.models.resnet50(weights=None)
 
     def forward(self, x, ad=True):
         x = self.model(x)
@@ -50,7 +50,7 @@ class CNN224_VGG_NOPT_1000(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         self.vgg = model
 
     def forward(self, x, ad=True):
@@ -69,7 +69,7 @@ class CNN224_VGG(BaseNet):
             torchvision.models.vgg.model_urls["vgg11_bn"],
             model_dir=pt.join(pt.dirname(__file__), "..", "..", "..", "data", "models"),
         )
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         model.load_state_dict(state_dict)
         model.classifier = model.classifier[:-3]
         self.vgg = model
@@ -294,7 +294,7 @@ class CNN224_CROP(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         self.core = nn.Sequential(*list(model.children())[0])
         self.features = nn.Sequential(*list(self.core.children())[:-8])
         self.features_n = nn.Sequential(

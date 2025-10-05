@@ -3,6 +3,7 @@
 # Licensed under the MIT License.
 
 import collections
+import os
 import os.path as pt
 from abc import abstractmethod, ABC
 from typing import List, Tuple
@@ -23,6 +24,19 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
 
+def _normalize_device(d):
+    if isinstance(d, int):
+        if d < 0 or not torch.cuda.is_available():
+            return "cpu"
+        n = torch.cuda.device_count()
+        return f"cuda:{d}" if d < n else ("cuda:0" if n > 0 else "cpu")
+    if isinstance(d, str):
+        if d == "cuda":
+            return "cuda:0" if torch.cuda.is_available() else "cpu"
+        return d
+    if isinstance(d, torch.device):
+        return "cpu" if d.type == "cpu" else f"cuda:{(d.index or 0)}"
+    return "cpu"
 
 def safe_concat(tensor_list, dim=0):
     # Initialize an empty list to store batch sizes
@@ -114,7 +128,7 @@ class BaseTrainer(ABC):
         self.sched = sched
         self.train_loader, self.val_loader, self.test_loader = dataset_loaders
         self.logger = logger
-        self.device = device
+        self.device = _normalize_device(device)
 
     def train(self, epochs: int) -> BaseNet:
         """Does epochs many full iteration of the data loader and trains the network with the data using self.loss"""
@@ -155,13 +169,47 @@ class BaseTrainer(ABC):
 
     def load(self, path: str) -> int:
         """Loads a snapshot of the training state, including network weights"""
-        snapshot = torch.load(path)
+        def _resolve_map_location():
+            env = os.environ.get("FCDD_MAP_LOCATION", "").strip()
+            if env:
+                return env  # 'cpu', 'cuda:0', 'cuda:24'...
+
+            dev = getattr(self, "device", "cpu")
+            n = torch.cuda.device_count()
+            has_gpu = torch.cuda.is_available() and n > 0
+
+            if isinstance(dev, int):
+                if dev < 0:
+                    return "cpu"
+                if has_gpu and 0 <= dev < n:
+                    return f"cuda:{dev}"
+                return "cuda:0" if has_gpu else "cpu"
+
+            if isinstance(dev, str):
+                if dev.startswith("cuda"):
+                    if dev == "cuda":
+                        return "cuda:0" if has_gpu else "cpu"
+                    try:
+                        idx = int(dev.split(":")[1])
+                        return dev if (has_gpu and 0 <= idx < n) else ("cuda:0" if has_gpu else "cpu")
+                    except Exception:
+                        return "cuda:0" if has_gpu else "cpu"
+                return "cpu"
+
+            return "cuda:0" if has_gpu else "cpu"
+
+        try:
+            snapshot = torch.load(path, map_location=_resolve_map_location(), weights_only=True)
+        except TypeError:
+            snapshot = torch.load(path, map_location=_resolve_map_location())
+            
         net_state = snapshot.pop("net", None)
         opt_state = snapshot.pop("opt", None)
         sched_state = snapshot.pop("sched", None)
         epoch = snapshot.pop("epoch", None)
         if net_state is not None and self.net is not None:
             self.net.load_state_dict(net_state)
+            self.net = self.net.to(self.device)
         if opt_state is not None and self.opt is not None:
             self.opt.load_state_dict(opt_state)
         if sched_state is not None and self.sched is not None:
