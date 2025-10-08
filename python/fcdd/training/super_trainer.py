@@ -7,7 +7,6 @@ from typing import List, Tuple
 
 import torch
 from fcdd.models.bases import FCDDNet, BaseNet
-from fcdd.training.ae import AETrainer
 from fcdd.training.fcdd import FCDDTrainer
 from fcdd.training.fcdd_refs import FCDDRefsTrainer
 from fcdd.training.bce import BCETrainer
@@ -157,21 +156,8 @@ class SuperTrainer(object):
                 device,
                 validation_every_epochs=validation_every_epochs
             )
-        else:
-            self.trainer = AETrainer(
-                net,
-                opt,
-                sched,
-                dataset_loaders,
-                logger,
-                objective,
-                gauss_std,
-                quantile,
-                resdown,
-                blur_heatmaps,
-                device,
-                validation_every_epochs=validation_every_epochs
-            )
+        else: 
+            raise ValueError("Error: objective not recognized!")
 
         self.logger = logger
         self.res = {}  # keys = {pt_roc, roc, gtmap_roc, prc, gtmap_prc}
