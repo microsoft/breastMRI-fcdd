@@ -38,7 +38,11 @@ We recommend a Conda-first setup for Pythorch. This avoids ABI mismatches like o
 Files used here live in python/ folder: python/environment.yml (GPU); python/environment-cpu.yml (CPU); python/requirements.txt (core-only)
 
 To install FCDD, run the following commands:
+<<<<<<< Updated upstream
 
+=======
+    
+>>>>>>> Stashed changes
     cd python 
     # Choose one (GPU / CPU)
     conda env create -f environment.yml # creates with name "fcdd" change if needed
