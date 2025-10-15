@@ -11,6 +11,7 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm.auto import tqdm
 from fcdd.datasets.bases import GTMapADDataset, ThreeReturnsDataset
 from fcdd.datasets.noise import kernel_size_to_std
 from fcdd.models.bases import BaseNet, ReceptiveNet
@@ -129,12 +130,21 @@ class BaseTrainer(ABC):
         self.train_loader, self.val_loader, self.test_loader = dataset_loaders
         self.logger = logger
         self.device = _normalize_device(device)
+    
+    def _bar(self, iterable, desc:str):
+        total = None
+        try:
+            total = len(iterable)
+        except Exception:
+            pass
+        return tqdm(iterable, total=total, desc=desc, dynamic_ncols=True, mininterval=0.2, leave=False)
 
     def train(self, epochs: int) -> BaseNet:
         """Does epochs many full iteration of the data loader and trains the network with the data using self.loss"""
         self.net = self.net.to(self.device).train()
         for epoch in range(epochs):
-            for n_batch, data in enumerate(self.train_loader):
+            bar = self._bar(self.train_loader, desc=f"Train Epoch {epoch+1}/{epochs}")
+            for n_batch, data in enumerate(bar):
                 inputs, labels = data
                 inputs = inputs.to(self.device)
                 self.opt.zero_grad()
@@ -142,16 +152,10 @@ class BaseTrainer(ABC):
                 loss = self.loss(outputs, inputs, labels)
                 loss.backward()
                 self.opt.step()
-                self.logger.log(
-                    epoch,
-                    n_batch,
-                    len(self.train_loader),
-                    loss,
-                    infoprint="LR {} ID {}".format(
-                        ["{:.0e}".format(p["lr"]) for p in self.opt.param_groups],
-                        str(self.__class__)[8:-2],
-                    ),
-                )
+                try:
+                    bar.set_postfix_str(f"loss {float(loss.detach().mean().cpu()):.4f}")
+                except Exception:
+                    pass
             self.sched.step()
         return self.net
 
@@ -298,7 +302,8 @@ class BaseADTrainer(BaseTrainer):
         self.net = self.net.to(self.device).train()
         for epoch in range(epochs):
             acc_data, acc_counter = [], 1
-            for n_batch, data in enumerate(self.train_loader):
+            bar = self._bar(self.train_loader, desc=f"Train Epoch {epoch+1}/{epochs}")
+            for n_batch, data in enumerate(bar):
                 if acc_counter < acc_batches and n_batch < len(self.train_loader) - 1:
                     acc_data.append(data)
                     acc_counter += 1
@@ -351,20 +356,10 @@ class BaseADTrainer(BaseTrainer):
                                 "err_normal": swloss[labels == 0].mean(),
                                 "err_anomalous": swloss[labels != 0].mean(),
                             }
-                    self.logger.log(
-                        epoch,
-                        n_batch,
-                        len(self.train_loader),
-                        loss,
-                        infoprint="LR {} ID {}{}".format(
-                            ["{:.0e}".format(p["lr"]) for p in self.opt.param_groups],
-                            str(self.__class__)[8:-2],
-                            " NCLS {}".format(self.train_loader.dataset.normal_classes)
-                            if hasattr(self.train_loader.dataset, "normal_classes")
-                            else "",
-                        ),
-                        info=info,
-                    )
+                    try:
+                        bar.set_postfix_str(f"loss={float(loss.detach().mean().cpu()):.4f}")
+                    except Exception:
+                        pass
             self.sched.step()
 
             if self.val_loader is not None:
@@ -506,7 +501,8 @@ class BaseADTrainer(BaseTrainer):
         )
         all_gtmaps, all_grads, all_refs = [], [], []
         refs = None
-        for n_batch, data in enumerate(loader):
+        bar = self._bar(loader, desc="VAL gather" if val else "TEST gather")
+        for n_batch, data in enumerate(bar):
             if isinstance(loader.dataset, GTMapADDataset):
                 inputs, labels, gtmaps = data
                 all_gtmaps.append(gtmaps)
@@ -562,18 +558,16 @@ class BaseADTrainer(BaseTrainer):
                 all_grads.append(grads.detach().cpu())
             if refs is not None:
                 all_refs.append(refs.detach().cpu())
-            self.logger.print(
-                "{} {:04d}/{:04d} ID {}{}".format(
-                    "TEST" if not val else "VAL ",
-                    n_batch,
-                    len(loader),
-                    str(self.__class__)[8:-2],
-                    " NCLS {}".format(loader.dataset.normal_classes)
-                    if hasattr(loader.dataset, "normal_classes")
-                    else "",
-                ),
-                fps=True,
-            )
+            if (n_batch % 50) == 0:
+                try:
+                    mean_loss = float(loss.detach().mean().cpu())
+                    ncls = getattr(loader.dataset, "normal_classes", None)
+                    suffix = f"loss {mean_loss:.4f}"
+                    if ncls is not None:
+                        suffix += f" | NCLS {ncls}"
+                except Exception:
+                    pass
+
         all_imgs = torch.cat(all_imgs)
         all_outputs = torch.cat(all_outputs)
         all_gtmaps = torch.cat(all_gtmaps) if len(all_gtmaps) > 0 else None
@@ -635,7 +629,6 @@ class BaseADTrainer(BaseTrainer):
         anomaly_score = self.anomaly_score(loss)
         try:
             grads = self.net.get_grad_heatmap(loss, inputs)
-            print("Grad shape is: ", grads.shape)
         except:
             # Make grads and tensors of 0s with shape of inputs
             # Derive shape from inputs but modify channel dimension
