@@ -33,7 +33,7 @@ publisher={Radiological Society of North America}
 
 ## 📦 Installation
 
-We recommend a Conda-first setup for Pythorch. This avoids ABI mismatches like operator torchvision::nms does not exist.
+We recommend a Conda-first setup for pytorch. This avoids ABI mismatches like operator torchvision::nms does not exist.
 
 Files used here live in python/ folder: python/environment.yml (GPU); python/environment-cpu.yml (CPU); python/requirements.txt (core-only)
 
