@@ -19,7 +19,7 @@ class VGG_BCE(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         # model.classifier = model.classifier[:-3]
         self.vgg = model
         self.lin = nn.Linear(1000, 1, bias=self.bias)
@@ -37,7 +37,7 @@ class VGG_BCE_1000(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         model.classifier = model.classifier[:-3]
         self.vgg = model
         self.lin = nn.Linear(4096, 1, bias=self.bias)
@@ -55,7 +55,7 @@ class VGG_BCE_CROP(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        model = torchvision.models.vgg11_bn(False)
+        model = torchvision.models.vgg11_bn(weights=None)
         self.core = nn.Sequential(*list(model.children())[0])
         self.features = nn.Sequential(*list(self.core.children())[:-8])
         self.features_n = nn.Sequential(

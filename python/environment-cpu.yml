@@ -1,0 +1,11 @@
+name: fcdd
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
+  - pip
