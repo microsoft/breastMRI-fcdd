@@ -17,7 +17,11 @@ from fcdd.datasets.noise import kernel_size_to_std
 from fcdd.models.bases import BaseNet, ReceptiveNet
 from fcdd.training import balance_labels
 from fcdd.util.logging import colorize as colorize_img, Logger
-from kornia import gaussian_blur2d
+from kornia.filters import gaussian_blur2d
+from fcdd.util.safety import (
+    MAX_CHECKPOINT_BYTES, MAX_EPOCHS, MAX_BATCH_SIZE, bounded_int,
+    bounded_reader, quantile_value,
+)
 from sklearn.metrics import roc_auc_score, roc_curve
 from torch import Tensor
 from torch.optim.lr_scheduler import _LRScheduler
@@ -202,10 +206,10 @@ class BaseTrainer(ABC):
 
             return "cuda:0" if has_gpu else "cpu"
 
-        try:
-            snapshot = torch.load(path, map_location=_resolve_map_location(), weights_only=True)
-        except TypeError:
-            snapshot = torch.load(path, map_location=_resolve_map_location())
+        with bounded_reader(path, MAX_CHECKPOINT_BYTES) as reader:
+            snapshot = torch.load(reader, map_location=_resolve_map_location(), weights_only=True)
+        if not isinstance(snapshot, dict):
+            raise ValueError('Snapshot must contain a dictionary of training state')
             
         net_state = snapshot.pop("net", None)
         opt_state = snapshot.pop("opt", None)
@@ -258,7 +262,7 @@ class BaseADTrainer(BaseTrainer):
         super().__init__(net, opt, sched, dataset_loaders, logger, device, **kwargs)
         self.objective = objective
         self.gauss_std = gauss_std
-        self.quantile = quantile
+        self.quantile = quantile_value(quantile)
         self.resdown = resdown
         self.blur_heatmaps = blur_heatmaps
         self.validation_every_epochs = kwargs.pop("validation_every_epochs", 1)
@@ -298,7 +302,8 @@ class BaseADTrainer(BaseTrainer):
             if the batch size is reduced accordingly (e.g. one half in this example), but can decrease training time.
         :return: the trained network
         """
-        assert 0 < acc_batches and isinstance(acc_batches, int)
+        bounded_int(epochs, 'epochs', 0, MAX_EPOCHS)
+        bounded_int(acc_batches, 'acc_batches', 1, MAX_BATCH_SIZE)
         self.net = self.net.to(self.device).train()
         for epoch in range(epochs):
             acc_data, acc_counter = [], 1
@@ -766,6 +771,24 @@ class BaseADTrainer(BaseTrainer):
         specific_idx: Tuple[List[int], List[int]] = (),
         subdir=".",
     ):
+        if not labels:
+            raise ValueError('Heatmap generation requires labeled samples')
+        bounded_int(show_per_cls, 'show_per_cls', 3, 1024)
+        if any(label not in (0, 1) for label in labels):
+            raise ValueError('Heatmap labels must be 0 or 1')
+        for tensor in (imgs, ascores, gtmaps, grads):
+            if tensor is not None and tensor.shape[0] != len(labels):
+                raise ValueError('Heatmap tensors and labels must have matching lengths')
+        if specific_idx is not None and len(specific_idx) > 0:
+            if len(specific_idx) != 2:
+                raise ValueError('Visualization indices must contain lists for labels 0 and 1')
+            for label, indices in enumerate(specific_idx):
+                if not isinstance(indices, (tuple, list)) or len(indices) > 1024:
+                    raise ValueError('Visualization indices must be lists of at most 1024 positions')
+                for index in indices:
+                    bounded_int(index, 'visualization index', 0, len(labels) - 1)
+                    if labels[index] != label:
+                        raise ValueError('Visualization index does not belong to the requested label')
         minsamples = min(collections.Counter(labels).values())
         lbls = torch.IntTensor(labels)
 
@@ -839,7 +862,7 @@ class BaseADTrainer(BaseTrainer):
                 ]
                 splits = np.array_split(sort, k)
                 idx = [
-                    s[int(n / (k - 1) * len(s)) if n != len(splits) - 1 else -1]
+                    s[int(n / (k - 1) * len(s)) if k > 1 and n != len(splits) - 1 else -1]
                     for n, s in enumerate(splits)
                 ]
                 self.logger.logtxt(
@@ -860,7 +883,7 @@ class BaseADTrainer(BaseTrainer):
                     gtmaps,
                     labels,
                 )
-                if specific_idx is not None and len(specific_idx) > 0:
+                if specific_idx is not None and len(specific_idx) > 0 and specific_idx[l]:
                     self._create_singlerow_heatmaps_picture(
                         specific_idx[l],
                         name,
@@ -1154,10 +1177,11 @@ class BaseADTrainer(BaseTrainer):
         ref = ref if ref is not None else imgs
         imgs.sub_(ref.min())
         ref = ref.sub(ref.min())
-        quantile = ref.reshape(-1).kthvalue(int(qu * ref.reshape(-1).size(0)))[
+        qu = quantile_value(qu)
+        quantile = ref.reshape(-1).kthvalue(max(1, int(qu * ref.numel())))[
             0
         ]  # qu% are below that
-        imgs.div_(quantile)  # (1 - qu)% values will end up being out of scale ( > 1)
+        imgs.div_(quantile.clamp_min(torch.finfo(imgs.dtype).eps))
         plosses = imgs.clamp(0, 1)  # clamp those
         return plosses
 
@@ -1175,11 +1199,12 @@ class BaseADTrainer(BaseTrainer):
                 (...,) + (None,) * (imgs.dim() - 1)
             ]
         )
+        qu = quantile_value(qu)
         quantile = imgs.reshape(imgs.size(0), -1).kthvalue(
-            int(qu * imgs.reshape(imgs.size(0), -1).size(1)), dim=1
+            max(1, int(qu * imgs.reshape(imgs.size(0), -1).size(1))), dim=1
         )[
             0
         ]  # qu% are below that
-        imgs.div_(quantile[(...,) + (None,) * (imgs.dim() - 1)])
+        imgs.div_(quantile.clamp_min(torch.finfo(imgs.dtype).eps)[(...,) + (None,) * (imgs.dim() - 1)])
         imgs = imgs.clamp(0, 1)  # clamp those
         return imgs

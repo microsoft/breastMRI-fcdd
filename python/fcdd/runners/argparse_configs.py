@@ -10,6 +10,7 @@ from fcdd.datasets import DS_CHOICES, PREPROC_CHOICES
 from fcdd.datasets.noise_modes import MODES
 from fcdd.models import choices
 from fcdd.training.setup import OBJECTIVES, SUPERVISE_MODES
+from fcdd.util.safety import DEFAULT_OE_LIMIT
 
 
 class DefaultConfig(object):
@@ -181,7 +182,7 @@ class DefaultConfig(object):
         parser.add_argument(
             "--oe-limit",
             type=int,
-            default=np.infty,
+            default=DEFAULT_OE_LIMIT,
             help="Determines the amount of different samples used for Outlier Exposure. "
             "Has no impact on synthetic anomalies.",
         )
@@ -273,4 +274,3 @@ class DefaultImagenetConfig(DefaultConfig):
             net="FCDD_CNN224_VGG_NOPT",
         )
         return parser
-

@@ -14,6 +14,7 @@ from fcdd.datasets.noise_modes import generate_noise
 from fcdd.datasets.offline_supervisor import noise as apply_noise, malformed_normal as apply_malformed_normal
 from fcdd.datasets.preprocessing import get_target_label_idx
 from fcdd.util.logging import Logger
+from fcdd.util.safety import validate_resources
 from torch.utils.data import DataLoader
 from torch.utils.data import Subset
 from torch.utils.data.dataset import Dataset
@@ -73,6 +74,7 @@ class TorchvisionDataset(BaseADDataset):
     def loaders(self, batch_size: int, shuffle_train=True, shuffle_test=False, num_workers: int = 0,
                 validation_ratio: float = 0.0)\
             -> Tuple[DataLoader, DataLoader, DataLoader]:
+        validate_resources(dict(batch_size=batch_size, workers=num_workers))
         assert not shuffle_test, \
             'using shuffled test raises problems with original GT maps for GT datasets, thus disabled atm!'
         # classes = None means all classes

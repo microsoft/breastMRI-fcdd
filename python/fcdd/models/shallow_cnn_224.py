@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torchvision
 from fcdd.models.bases import BaseNet
 from fcdd.models.fcdd_cnn_224 import FCDD_CNN224, FCDD_CNN224_VGG, FCDD_CNN224_VGG_NOPT
-from torch.hub import load_state_dict_from_url
+from fcdd.models.weights import load_vgg11_bn_weights
 from torch.nn import Conv2d, MaxPool2d
 
 
@@ -65,10 +65,7 @@ class CNN224_VGG(BaseNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        state_dict = load_state_dict_from_url(
-            torchvision.models.vgg.model_urls["vgg11_bn"],
-            model_dir=pt.join(pt.dirname(__file__), "..", "..", "..", "data", "models"),
-        )
+        state_dict = load_vgg11_bn_weights()
         model = torchvision.models.vgg11_bn(weights=None)
         model.load_state_dict(state_dict)
         model.classifier = model.classifier[:-3]

@@ -13,24 +13,27 @@ from typing import List
 
 import torch
 from fcdd.util.logging import Logger
+from fcdd.util.safety import MAX_CONFIG_BYTES, bounded_reader, confined_path, trusted_root, validate_resources
 
 
 def read_cfg(cfg_file: str):
     """ Reads a given configuration file from disk and transforms it into a json dictionary of parameters """
-    with open(cfg_file) as reader:
-        cfg = reader.readlines()
-        cfg = ' '.join(cfg)
-        re.DOTALL = True
-        pttn = re.compile('\{(.*)\}')
-        cfg = pttn.findall(cfg)
-        assert len(cfg) == 1
-        cfg = cfg[0]
-        cfg = json.loads('{{{}}}'.format(cfg))
-        return cfg
+    with bounded_reader(cfg_file, MAX_CONFIG_BYTES, text=True) as text:
+        start = text.find('{')
+        if start < 0:
+            raise ValueError('Configuration does not contain a JSON object')
+        cfg, _ = json.JSONDecoder().raw_decode(text[start:])
+    if not isinstance(cfg, dict):
+        raise ValueError('Configuration must be a JSON object')
+    return cfg
 
 
 def extract_args(args: Namespace, cfg: dict):
     """ Extracts all parameters found in the cfg configuration dictionary and put them in the argparse Namespace """
+    validate_resources(cfg)
+    output_root = trusted_root(args.logdir)
+    config_logdir = cfg['logdir']
+    logdir = output_root if config_logdir == args.logdir else confined_path(output_root, config_logdir)
     args.bias = cfg['bias']
     args.optimizer_type = cfg['optimizer_type']
     args.preproc = cfg['preproc']
@@ -49,7 +52,7 @@ def extract_args(args: Namespace, cfg: dict):
     args.normal_class = cfg['normal_class']
     args.acc_batches = cfg['acc_batches']
     args.objective = cfg['objective']
-    args.logdir = cfg['logdir']
+    args.logdir = logdir
     args.load = cfg['load']
     args.noise_mode = cfg['noise_mode']
     args.oe_limit = cfg['oe_limit']

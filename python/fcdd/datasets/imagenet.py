@@ -16,8 +16,8 @@ from fcdd.datasets.outlier_exposure.imagenet import MyImageFolder
 from fcdd.datasets.preprocessing import get_target_label_idx
 from fcdd.util.logging import Logger
 from torch.utils.data import Subset
-from torchvision.datasets.imagenet import META_FILE, parse_train_archive, parse_val_archive
-from torchvision.datasets.imagenet import verify_str_arg, load_meta_file, check_integrity, parse_devkit_archive
+from torchvision.datasets.imagenet import verify_str_arg
+from fcdd.util.safety import MAX_METADATA_BYTES, bounded_reader, confined_path, prepared_imagenet, trusted_root
 from torchvision.transforms.functional import to_tensor, to_pil_image
 
 ROOT = pt.join(pt.dirname(__file__), '..')
@@ -53,7 +53,7 @@ class ADImageNet(TorchvisionDataset):
             'Noise mode "malformed_normal" is not supported for ImageNet because nominal images are loaded ' \
             'only if not replaced by some artificial anomaly (to speedup data preprocessing).'
 
-        root = pt.join(root, self.base_folder)
+        root = confined_path(root, self.base_folder)
         super().__init__(root, logger=logger)
 
         self.n_classes = 2  # 0: normal, 1: outlier
@@ -141,11 +141,15 @@ class PathsMetaFileImageNet(MyImageFolder):
     Does not yet implement get_item.
     """
     def __init__(self, root, split='train', **kwargs):
-        root = self.root = os.path.expanduser(root)
+        root = self.root = trusted_root(root)
         self.split = verify_str_arg(split, "split", ("train", "val"))
 
         self.parse_archives()
-        wnid_to_classes = load_meta_file(self.root)[0]
+        with bounded_reader(confined_path(root, 'meta.bin'), MAX_METADATA_BYTES) as reader:
+            metadata = torch.load(reader, map_location='cpu', weights_only=True)
+        if not isinstance(metadata, (tuple, list)) or len(metadata) != 2 or not isinstance(metadata[0], dict):
+            raise ValueError('Invalid ImageNet metadata')
+        wnid_to_classes = metadata[0]
 
         super().__init__(self.split_folder, **kwargs)
         self.root = root
@@ -158,18 +162,11 @@ class PathsMetaFileImageNet(MyImageFolder):
                              for cls in clss}
 
     def parse_archives(self):
-        if not check_integrity(os.path.join(self.root, META_FILE)):
-            parse_devkit_archive(self.root)
-
-        if not os.path.isdir(self.split_folder):
-            if self.split == 'train':
-                parse_train_archive(self.root)
-            elif self.split == 'val':
-                parse_val_archive(self.root)
+        prepared_imagenet(self.root, self.split)
 
     @property
     def split_folder(self):
-        return os.path.join(self.root, self.split)
+        return confined_path(self.root, self.split)
 
     def extra_repr(self):
         return "Split: {split}".format(**self.__dict__)

@@ -21,6 +21,10 @@ import torch
 import torchvision.utils as vutils
 from fcdd.util import DefaultList, CircleList, NumpyEncoder
 from fcdd.util.metrics import mean_roc
+from fcdd.util.safety import (
+    MAX_EPOCHS, MAX_LOG_BYTES, MAX_TENSOR_BYTES, append_text, atomic_writer,
+    bounded_int, bounded_json, confined_path, filename, trusted_root,
+)
 from matplotlib import cm
 from torch import Tensor
 from torch.optim.lr_scheduler import _LRScheduler
@@ -105,7 +109,8 @@ class Logger(object):
         """
         self.start = int(time.time())
         self.exp_start_time = self.start if exp_start_time is None else exp_start_time
-        self.dir = logdir.replace('{t}', time_format(self.exp_start_time))
+        bounded_int(window, 'logging window', 1, 1000)
+        self.dir = trusted_root(logdir.replace('{t}', time_format(self.exp_start_time)))
         if not pt.exists(os.path.dirname(self.dir)):
             os.makedirs(os.path.dirname(self.dir))
         self.t = time.time()
@@ -122,6 +127,17 @@ class Logger(object):
         self.__warnings = []
         self._scalars = {}
         self._steps = {}
+
+    def _path(self, subdir='.', name=None):
+        return confined_path(self.dir, subdir, filename(name)) if name is not None else confined_path(self.dir, subdir)
+
+    @staticmethod
+    def _buffer(current, text):
+        if len(current) + len(text) > MAX_LOG_BYTES:
+            raise ValueError(f'Log buffer exceeds {MAX_LOG_BYTES} bytes; flush it before logging more text')
+        if len(current.encode('utf-8')) + len(text.encode('utf-8')) > MAX_LOG_BYTES:
+            raise ValueError(f'Log buffer exceeds {MAX_LOG_BYTES} bytes; flush it before logging more text')
+        return current + text
 
     def reset(self, logdir: str = None, exp_start_time: float = None):
         """
@@ -145,7 +161,7 @@ class Logger(object):
         self._scalars = {}
         self._steps = {}
         if logdir is not None:
-            self.dir = logdir.replace('{t}', time_format(self.exp_start_time))
+            self.dir = trusted_root(logdir.replace('{t}', time_format(self.exp_start_time)))
             if not pt.exists(os.path.dirname(self.dir)):
                 os.makedirs(os.path.dirname(self.dir))
 
@@ -165,6 +181,7 @@ class Logger(object):
         :param infoprint: a string that is to be printed in addition to the usual log data.
         :param force_print: force a print, e.g. at the end of an epoch, ignoring the fps constraint
         """
+        bounded_int(epoch, 'epoch', 0, MAX_EPOCHS)
         if info is not None:
             self.log_info(info)
 
@@ -202,7 +219,12 @@ class Logger(object):
         :param info: dictionary of metrics that are to be maintained like the loss.
         :param epoch: current epoch
         """
+        if epoch is not None:
+            bounded_int(epoch, 'epoch', 0, MAX_EPOCHS)
+        if len(set(self.__further_keys).union(info)) > 128:
+            raise ValueError('Cannot log more than 128 metric names')
         for k, v in info.items():
+            filename(k)
             if k not in self.__further_keys:
                 if '{}_all'.format(k) in self.history:
                     raise ValueError('{} is already part of the history.'.format(k))
@@ -222,24 +244,21 @@ class Logger(object):
         """
         if not fps:
             print(txt, file=sys.stderr if err else sys.stdout)
-            self.printlog += '{}\n'.format(txt)
+            self.printlog = self._buffer(self.printlog, '{}\n'.format(txt))
         else:
             diff = time.time() - self.t
             if diff > 1 / self.fps:
                 self.t = time.time()
                 print(txt, file=sys.stderr if err else sys.stdout)
-                self.printlog += '{}\n'.format(txt)
+                self.printlog = self._buffer(self.printlog, '{}\n'.format(txt))
 
     def log_prints(self):
         """
         Writes all remembered prints to a file named print.log in the log directory.
         Afterwards, empties the collection of remembered prints.
         """
-        outfile = pt.join(self.dir, 'print.log')
-        if not pt.exists(os.path.dirname(outfile)):
-            os.makedirs(os.path.dirname(outfile))
-        with open(outfile, 'a') as writer:
-            writer.write(self.printlog)
+        outfile = self._path(name='print.log')
+        append_text(outfile, self.printlog)
         self.printlog = ''
 
     def save(self, subdir='.'):
@@ -252,49 +271,37 @@ class Logger(object):
         :param subdir: if given, creates a subdirectory in the log directory. The data is written to a file
             in this subdirectory instead.
         """
-        outfile = pt.join(self.dir, subdir, 'history.json')
-        if not pt.exists(os.path.dirname(outfile)):
-            os.makedirs(os.path.dirname(outfile))
-        with open(outfile, 'w') as writer:
-            json.dump(self.history, writer)
-        outfile = pt.join(self.dir, subdir, 'log.txt')
-        self.logtxtfile = outfile
+        outfile = self._path(subdir, 'history.json')
+        bounded_json(outfile, self.history)
+        outfile = self._path(subdir, 'log.txt')
         txt = self.loggingtxt
-        self.loggingtxt = ''
         txt += 'START: {} \n'.format(
             datetime.fromtimestamp(self.start).strftime('%d-%m-%Y %H:%M:%S')
         )
         txt += 'DURATION: {} \n'.format(
             datetime.fromtimestamp(time.time()) - datetime.fromtimestamp(self.start)
         )
-        with open(outfile, 'w') as writer:
-            writer.write(txt)
+        append_text(outfile, txt)
+        self.logtxtfile = outfile
+        self.loggingtxt = ''
 
     def single_save(self, name: str, dic: Any, subdir='.'):
         """
         Writes a given dictionary to a json file in the log directory.
-        Returns without impact if the size of the dictionary exceeds 10MB.
+        Raises ValueError if JSON exceeds its 10MB budget; existing files remain intact.
         :param name: name of the json file
         :param dic: serializable dictionary
         :param subdir: if given, creates a subdirectory in the log directory. The data is written to a file
             in this subdirectory instead.
         """
-        outfile = pt.join(self.dir, subdir, '{}.json'.format(name))
-        if not pt.exists(os.path.dirname(outfile)):
-            os.makedirs(os.path.dirname(outfile))
+        filename(name)
+        outfile = self._path(subdir, '{}.json'.format(name))
         if isinstance(dic, dict):
-            sz = np.sum([sys.getsizeof(v) for k, v in dic.items()])
-            if sz > 10000000:
-                self.logtxt(
-                    'WARNING: Could not save {}, because size of dict is {}, which exceeded 10MB!'
-                    .format(pt.join(self.dir, subdir, '{}.json'.format(name)), sz),
-                    print=True
-                )
-                return
-            with open(outfile, 'w') as writer:
-                json.dump(dic, writer, cls=NumpyEncoder)
+            bounded_json(outfile, dic)
         else:
-            torch.save(dic, outfile.replace('.json', '.pth'))
+            outfile = self._path(subdir, '{}.pth'.format(name))
+            with atomic_writer(outfile, MAX_TENSOR_BYTES) as writer:
+                torch.save(dic, writer)
 
     def plot(self, subdir='.'):
         """
@@ -305,7 +312,7 @@ class Logger(object):
         :return:
         """
         matplotlib.use('Agg')
-        outfile = pt.join(self.dir, subdir, 'err.pdf')
+        outfile = self._path(subdir, 'err.pdf')
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         plt.plot(self.history['err'], ls='-')
@@ -324,7 +331,7 @@ class Logger(object):
             plt.plot(self.history[k], ls='-')
             plt.ylabel(k)
             plt.xlabel('epoch')
-            plt.savefig(outfile.replace('err.pdf', '{}.pdf'.format(k)))
+            plt.savefig(self._path(subdir, '{}.pdf'.format(filename(k))))
             plt.close()
 
     def single_plot(self, name: str, values: List[float], xs: List[float] = None,
@@ -342,7 +349,7 @@ class Logger(object):
         :return:
         """
         matplotlib.use('Agg')
-        outfile = pt.join(self.dir, subdir, '{}.pdf'.format(name))
+        outfile = self._path(subdir, '{}.pdf'.format(filename(name)))
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         if xs is None:
@@ -364,8 +371,11 @@ class Logger(object):
         :param name: the name of the pdf file.
         :param step: the step (x-axis) for the value.
         """
+        filename(name)
         matplotlib.use('Agg')
         if name not in self._scalars:
+            if len(self._scalars) >= 128:
+                raise ValueError('Cannot log more than 128 scalar names')
             self._scalars[name] = []
             self._steps[name] = []
             if step is None:
@@ -383,7 +393,7 @@ class Logger(object):
         self._steps[name].append(step)
         fig = plt.figure()
         plt.plot(self._steps[name], self._scalars[name], linewidth=0.5)
-        outfile = pt.join(self.dir, '{}.pdf'.format(name))
+        outfile = self._path(name='{}.pdf'.format(name))
         os.makedirs(os.path.dirname(outfile), exist_ok=True)
         fig.savefig(outfile, format='pdf')
         plt.close()
@@ -414,7 +424,7 @@ class Logger(object):
             Defaults to None for no column headers.
         :return:
         """
-        outfile = pt.join(self.dir, subdir, '{}.png'.format(name))
+        outfile = self._path(subdir, '{}.png'.format(filename(name)))
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         t = tensors.clone()
@@ -440,9 +450,10 @@ class Logger(object):
             del zero_std_mask_grid, zero_std_mask, vals
 
         t = t.transpose(0, 2).transpose(0, 1).numpy() * 255
+        t = np.clip(np.rint(t), 0, 255).astype(np.uint8)
         if rowheaders is not None:
             n, c, h, w = tensors.shape
-            t = np.concatenate((torch.zeros(t.shape[0], int(w * 1.8), 3), t), 1)  # add black front column
+            t = np.concatenate((np.zeros((t.shape[0], int(w * 1.8), 3), dtype=t.dtype), t), 1)
             for i, head in enumerate(rowheaders):
                 if len(str(head)) > 6:
                     import warnings
@@ -457,7 +468,7 @@ class Logger(object):
                 )
         if colcounter is not None:
             n, c, h, w = tensors.shape
-            t = np.concatenate((torch.zeros(32, t.shape[1], 3), t), 0)  # add black front row
+            t = np.concatenate((np.zeros((32, t.shape[1], 3), dtype=t.dtype), t), 0)
             for i, s in enumerate(colcounter):
                 t = cv2.putText(
                     t, str(s), (w - 24 + (w + 2) * i, 24),
@@ -466,11 +477,12 @@ class Logger(object):
 
         if row_sep_at is not None and row_sep_at[0] is not None and len(row_sep_at) == 2:
             height, at = row_sep_at
-            t = np.concatenate([t[:at], np.zeros([height, t.shape[1], t.shape[2]]), t[at:]]).astype(np.float32)
+            t = np.concatenate([t[:at], np.zeros((height, t.shape[1], t.shape[2]), dtype=t.dtype), t[at:]])
 
         if t.shape[-1] == 3:
             t = cv2.cvtColor(t, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(outfile, t)
+        if not cv2.imwrite(outfile, t):
+            raise OSError(f'Could not write image artifact: {outfile}')
 
     def snapshot(self, net: torch.nn.Module, opt: Optimizer, sched: _LRScheduler = None,
                  epoch: int = None, subdir='.', name: str = "snapshot"):
@@ -485,7 +497,7 @@ class Logger(object):
             in this subdirectory instead.
         :return:
         """
-        outfile = pt.join(self.dir, subdir, f'{name}.pt')
+        outfile = self._path(subdir, f'{filename(name)}.pt')
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         torch.save(
@@ -503,7 +515,7 @@ class Logger(object):
         :param params: all parameters of the training in form of a string representation (json dump of a dictionary)
         :param subdir: suffix to append to logdir
         """
-        outfile = pt.join(self.dir, subdir, 'config.txt')
+        outfile = self._path(subdir, 'config.txt')
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         self.config_outfile = outfile
@@ -517,7 +529,7 @@ class Logger(object):
             else:
                 return None
 
-        outfile = pt.join(self.dir, subdir, 'src.tar.gz')
+        outfile = self._path(subdir, 'src.tar.gz')
         if not pt.exists(os.path.dirname(outfile)):
             os.makedirs(os.path.dirname(outfile))
         with tarfile.open(outfile, "w:gz") as tar:
@@ -536,10 +548,9 @@ class Logger(object):
         if print:
             self.print(s)
         if self.logtxtfile is None:
-            self.loggingtxt += '{}\n'.format(s)
+            self.loggingtxt = self._buffer(self.loggingtxt, '{}\n'.format(s))
         else:
-            with open(self.logtxtfile, 'a') as writer:
-                writer.write('{}\n'.format(s))
+            append_text(confined_path(self.dir, self.logtxtfile), '{}\n'.format(s))
 
     def warning(self, s: str, unique: bool = False, print: bool = True):
         """
@@ -552,11 +563,10 @@ class Logger(object):
             return
         if print:
             self.print(s, err=True)
-        outfile = pt.join(self.dir, 'WARNINGS.log')
-        if not pt.exists(os.path.dirname(outfile)):
-            os.makedirs(os.path.dirname(outfile))
-        with open(outfile, 'a') as writer:
-            writer.write(s)
+        outfile = self._path(name='WARNINGS.log')
+        if len(self.__warnings) >= 1000:
+            raise ValueError('Warning history exceeds 1000 entries')
+        append_text(outfile, s)
         self.__warnings.append(s)
 
     def timeit(self, msg: str = 'Operation'):
@@ -594,7 +604,7 @@ def plot_many_roc(logdir: str, results: List[dict], labels: List[str] = None, na
     if results is None or any([r is None for r in results]) or len(results) == 0:
         return None
     matplotlib.use('Agg')
-    outfile = pt.join(logdir, '{}.pdf'.format(name))
+    outfile = confined_path(logdir, '{}.pdf'.format(filename(name)))
     if not pt.exists(os.path.dirname(outfile)):
         os.makedirs(os.path.dirname(outfile))
     if labels is None:
@@ -612,4 +622,3 @@ def plot_many_roc(logdir: str, results: List[dict], labels: List[str] = None, na
     plt.legend(legend,  fontsize='xx-small' if len(legend) > 20 else 'x-small')
     plt.savefig(outfile, format='pdf')
     plt.close()
-

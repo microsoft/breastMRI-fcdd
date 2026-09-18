@@ -5,7 +5,9 @@
 import json
 import os
 import os.path as pt
-from sre_constants import error as sre_constants_error
+from re import error as sre_constants_error
+from contextlib import nullcontext
+from functools import partial
 
 import numpy as np
 import torch
@@ -14,9 +16,14 @@ import torchvision.transforms as transforms
 from PIL import UnidentifiedImageError
 from fcdd.datasets.confs.imagenet1k_classes import IMAGENET1k_CLS_STR
 from fcdd.util.logging import Logger
+from fcdd.datasets.safe_io import find_classes, load_image, make_dataset
+from fcdd.util.safety import (
+    DEFAULT_OE_LIMIT, MAX_METADATA_BYTES, MAX_SAMPLES, bounded_int, bounded_json,
+    bounded_reader, confined_path, prepared_imagenet, trusted_root, validate_image_shape,
+)
 from torch.utils.data import DataLoader
 from torchvision.datasets import DatasetFolder
-from torchvision.datasets.folder import has_file_allowed_extension, default_loader, IMG_EXTENSIONS
+from torchvision.datasets.folder import has_file_allowed_extension, IMG_EXTENSIONS
 from torchvision.datasets.vision import StandardTransform
 from typing import List, Tuple
 
@@ -26,7 +33,13 @@ def ceil(x: float):
 
 
 class OEImageNet(torchvision.datasets.ImageNet):
-    def __init__(self, size: torch.Size, root: str = None, split='val', limit_var: int = np.infty, exclude: List[str] = ()):
+    find_classes = staticmethod(find_classes)
+    make_dataset = staticmethod(make_dataset)
+
+    def parse_archives(self):
+        prepared_imagenet(self.root, self.split)
+
+    def __init__(self, size: torch.Size, root: str = None, split='val', limit_var: int = DEFAULT_OE_LIMIT, exclude: List[str] = ()):
         """
         Outlier Exposure dataset for ImageNet.
         :param size: size of the samples in n x c x h x w, samples will be resized to h x w. If n is larger than the
@@ -39,11 +52,11 @@ class OEImageNet(torchvision.datasets.ImageNet):
             from all available ones to be the training data.
         :param exclude: all class names that are to be excluded.
         """
-        assert len(size) == 4 and size[2] == size[3]
-        assert size[1] in [1, 3]
-        root = pt.join(root, 'imagenet', )
+        validate_image_shape(size)
+        bounded_int(limit_var, 'oe_limit', 1, MAX_SAMPLES)
+        root = confined_path(root, 'imagenet')
         self.root = root
-        super().__init__(root, split)
+        super().__init__(root, split, loader=partial(load_image, root=root))
         self.transform = transforms.Compose([
             transforms.Resize((size[2], size[3])),
             transforms.Grayscale() if size[1] == 1 else transforms.Lambda(lambda x: x),
@@ -59,7 +72,7 @@ class OEImageNet(torchvision.datasets.ImageNet):
             # self.show()
             # print()
         if limit_var is not None and limit_var < len(self):
-            self.picks = np.random.choice(np.arange(len(self.picks)), size=limit_var, replace=False)
+            self.picks = np.random.choice(self.picks, size=limit_var, replace=False).tolist()
         if limit_var is not None and limit_var > len(self):
             print(
                 'OEImageNet shall be limited to {} samples, but ImageNet contains only {} samples, thus using all.'
@@ -85,14 +98,13 @@ class OEImageNet(torchvision.datasets.ImageNet):
 
 class MyImageFolder(DatasetFolder):
     """
-    Reimplements __init__() and make_dataset().
-    The only change is to add print lines to have some feedback because make_dataset might take some time...
+    Image folder with bounded indexing and validated, confined metadata caching.
     """
+    find_classes = staticmethod(find_classes)
+
     def __init__(self, root, transform=None, target_transform=None, is_valid_file=None, logger=None):
-        if isinstance(root, torch._six.string_classes):
-            root = os.path.expanduser(root)
-        self.root = root
-        self.metafile = os.path.join(self.root, 'meta.json')
+        self.root = trusted_root(root)
+        self.metafile = confined_path(self.root, 'meta.json')
         self.transform = transform
         self.target_transform = target_transform
         transforms = None
@@ -100,7 +112,7 @@ class MyImageFolder(DatasetFolder):
             transforms = StandardTransform(transform, target_transform)
         self.transforms = transforms
         self.logger = logger
-        self.loader = default_loader
+        self.loader = partial(load_image, root=self.root)
         self.extensions = extensions = IMG_EXTENSIONS if is_valid_file is None else None
 
         classes, class_to_idx = self.find_classes(self.root)
@@ -116,37 +128,37 @@ class MyImageFolder(DatasetFolder):
         self.imgs = self.samples
 
     def make_dataset(self, dir, class_to_idx, extensions=None, is_valid_file=None):
-        images = []
-        dir = os.path.expanduser(dir)
-        if os.path.exists(self.metafile):
-            self.logprint('ImageFolder dataset is loading metadata from {}...'.format(self.metafile), fps=False)
-            with open(self.metafile, 'r') as reader:
-                images = json.load(reader)
-                self.logprint('ImageFolder dataset has loaded metadata.')
+        dir = trusted_root(dir)
+        metafile = confined_path(dir, self.metafile)
+        if (extensions is None) == (is_valid_file is None):
+            raise ValueError('Specify exactly one of extensions or is_valid_file')
+        if is_valid_file is None:
+            is_valid_file = partial(has_file_allowed_extension, extensions=extensions)
+        if os.path.exists(metafile):
+            self.logprint('ImageFolder dataset is loading metadata from {}...'.format(metafile), fps=False)
+            with bounded_reader(metafile, MAX_METADATA_BYTES, text=True) as text:
+                cached = json.loads(text)
+            if not isinstance(cached, list) or len(cached) > MAX_SAMPLES:
+                raise ValueError('Invalid or oversized image metadata')
+            images = []
+            for item in cached:
+                if not isinstance(item, list) or len(item) != 2 or not isinstance(item[0], str):
+                    raise ValueError('Metadata entries must be [path, class_index] pairs')
+                path = confined_path(dir, item[0])
+                target = bounded_int(item[1], 'metadata class index', 0, len(class_to_idx) - 1)
+                class_name = os.path.relpath(path, dir).split(os.sep)[0]
+                if (class_to_idx.get(class_name) != target or not os.path.isfile(path)
+                        or not is_valid_file(path)):
+                    raise ValueError('Metadata image path does not match its class or file type')
+                images.append((path, target))
+            self.logprint('ImageFolder dataset has loaded metadata.')
         else:
             self.logprint(
                 'ImageFolder dataset could not find metafile at {}. Creating it instead...'.format(self.metafile),
                 fps=False
             )
-            if not ((extensions is None) ^ (is_valid_file is None)):
-                raise ValueError("Both extensions and is_valid_file cannot be None or not None at the same time")
-            if extensions is not None:
-                def is_valid_file(x):
-                    return has_file_allowed_extension(x, extensions)
-            size = len(class_to_idx.keys())
-            for n, target in enumerate(sorted(class_to_idx.keys())):
-                self.logprint('ImageFolder dataset is processing target {} - {}/{}'.format(target, n, size))
-                d = os.path.join(dir, target)
-                if not os.path.isdir(d):
-                    continue
-                for root, _, fnames in sorted(os.walk(d, followlinks=True)):
-                    for fname in sorted(fnames):
-                        path = os.path.join(root, fname)
-                        if is_valid_file(path):
-                            item = (path, class_to_idx[target])
-                            images.append(item)
-            with open(self.metafile, 'w') as writer:
-                json.dump(images, writer)
+            images = make_dataset(dir, class_to_idx, is_valid_file=is_valid_file)
+            bounded_json(metafile, images, maximum=MAX_METADATA_BYTES)
         return images
 
     def logprint(self, s, fps=True):
@@ -210,6 +222,7 @@ class MyImageNet22K(MyImageFolder):
         :param args: see :class:`torchvision.DatasetFolder`.
         :param kwargs: see :class:`torchvision.DatasetFolder`.
         """
+        validate_image_shape(size)
         super(MyImageNet22K, self).__init__(root, *args, **kwargs)
 
         self.exclude_imagenet1k = exclude_imagenet1k
@@ -247,7 +260,7 @@ class MyImageNet22K(MyImageFolder):
 
 
 class OEImageNet22k(MyImageNet22K):
-    def __init__(self, size: torch.Size, root: str = None, limit_var=np.infty, logger: Logger = None):
+    def __init__(self, size: torch.Size, root: str = None, limit_var=DEFAULT_OE_LIMIT, logger: Logger = None):
         """
         Outlier Exposure dataset for ImageNet22k.
         :param size: size of the samples in n x c x h x w, samples will be resized to h x w. If n is larger than the
@@ -259,17 +272,19 @@ class OEImageNet22k(MyImageNet22K):
             from all available ones to be the training data.
         :param logger: logger
         """
-        assert len(size) == 4 and size[2] == size[3]
-        assert size[1] in [1, 3]
-        root = pt.join(root, 'imagenet22k') if not root.endswith('imagenet') else pt.join(root, '..', 'imagenet22k')
-        root = pt.join(root, 'fall11_whole_extracted')  # important to have a second layer, to speed up load meta file
+        validate_image_shape(size)
+        bounded_int(limit_var, 'oe_limit', 1, MAX_SAMPLES)
+        root = trusted_root(root)
+        root = pt.dirname(root) if pt.basename(root) == 'imagenet' else root
+        root = confined_path(root, 'imagenet22k', 'fall11_whole_extracted')
         self.root = root
         self.logger = logger
-        with logger.timeit('Loading ImageNet22k'):
+        with logger.timeit('Loading ImageNet22k') if logger is not None else nullcontext():
             super().__init__(root=root, size=size, logger=logger)
 
         self.transform = transforms.Compose([
-            transforms.Resize(size[2]),
+            transforms.Resize((size[2], size[3])),
+            transforms.Grayscale() if size[1] == 1 else transforms.Lambda(lambda x: x),
             transforms.ToTensor()
         ])
         self.picks = None
@@ -296,4 +311,3 @@ class OEImageNet22k(MyImageNet22K):
         sample = sample.mul(255).byte()
 
         return sample
-

@@ -4,7 +4,6 @@
 
 import random
 import traceback
-from itertools import cycle
 from typing import List, Tuple
 
 import numpy as np
@@ -15,12 +14,19 @@ from fcdd.datasets.bases import TorchvisionDataset
 from fcdd.datasets.outlier_exposure.imagenet import OEImageNet, OEImageNet22k
 #from fcdd.datasets.outlier_exposure.mvtec import OEMvTec
 from fcdd.datasets.preprocessing import ImgGTTargetTransform
+from fcdd.util.safety import DEFAULT_OE_LIMIT, MAX_SAMPLES, bounded_int
+
+
+def repeat_loader(loader):
+    # itertools.cycle retains every decoded batch indefinitely.
+    while True:
+        yield from loader
 
 
 class OnlineSupervisor(ImgGTTargetTransform):
     invert_threshold = 0.025
 
-    def __init__(self, ds: TorchvisionDataset, supervise_mode: str, noise_mode: str, oe_limit: int = np.infty,
+    def __init__(self, ds: TorchvisionDataset, supervise_mode: str, noise_mode: str, oe_limit: int = DEFAULT_OE_LIMIT,
                  p: float = 0.5, exclude: List[str] = ()):
         """
         This class is used as a Transform parameter for torchvision datasets.
@@ -37,6 +43,10 @@ class OnlineSupervisor(ImgGTTargetTransform):
         :param p: the chance to replace a sample from the original dataset during training.
         :param exclude: all class names that are to be excluded in Outlier Exposure datasets.
         """
+        bounded_int(oe_limit, 'oe_limit', 1, MAX_SAMPLES)
+        from fcdd.datasets.noise_modes import MODES
+        if noise_mode not in MODES:
+            raise ValueError(f'Unknown noise mode: {noise_mode}')
         self.ds = ds
         self.supervise_mode = supervise_mode
         self.noise_mode = noise_mode
@@ -44,13 +54,13 @@ class OnlineSupervisor(ImgGTTargetTransform):
         self.p = p
         self.noise_sampler = None
         if noise_mode == 'imagenet':
-            self.noise_sampler = cycle(
+            self.noise_sampler = repeat_loader(
                 OEImageNet(
                     (1, ) + ds.raw_shape, limit_var=oe_limit, root=ds.root, exclude=exclude
                 ).data_loader()
             )
         elif noise_mode == 'imagenet22k':
-            self.noise_sampler = cycle(
+            self.noise_sampler = repeat_loader(
                 OEImageNet22k(
                     (1, ) + ds.raw_shape, limit_var=oe_limit, logger=ds.logger,
                     root=ds.root

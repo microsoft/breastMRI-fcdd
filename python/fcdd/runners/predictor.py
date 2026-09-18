@@ -33,6 +33,8 @@ import os
 from fcdd.training.fcdd_refs import FCDDRefsTrainer
 from fcdd.models.fcdd_ref_cnn_224 import FCDD_REF_CNN224_VGG_NOPT
 from fcdd.datasets.image_folder_refs import ADImageRefDataset
+from fcdd.util.io import read_cfg
+from fcdd.util.safety import DEFAULT_OE_LIMIT, confined_path, quantile_value, trusted_root
 
 def _dev(device):
     if isinstance(device,int):
@@ -46,38 +48,38 @@ def _dev(device):
         return "cpu"
     return device 
 
-def _resolve_path(p: str, base_dir: str) -> str:
-    if os.path.isabs(p):
-        return p
-
-    base_dir = os.path.abspath(base_dir)
-
-    cand1 = os.path.abspath(os.path.join(base_dir, p))
-    if os.path.exists(cand1):
-        return cand1
-
-    norm_p = os.path.normpath(p)
-    parts = norm_p.split(os.sep)
-    if "data" in parts:
-        tail = parts[parts.index("data") + 1 :]
-        cur = base_dir
-        while True:
-            if os.path.basename(cur) == "data":
-                cand2 = os.path.join(cur, *tail) if tail else cur
-                cand2 = os.path.abspath(cand2)
-                if os.path.exists(cand2):
-                    return cand2
-                break
-            parent = os.path.dirname(cur)
-            if parent == cur:
-                break
-            cur = parent
-
-    raise FileNotFoundError(
-        f"Could not resolve datadir '{p}' from base '{base_dir}'. "
-        f"Tried: {cand1} and nearest-‘data’ anchoring. "
-        f"Pass --datadir with an absolute path if needed."
-    )
+def _resolve_path(p: str, base_dir: str, explicit=False) -> str:
+    if explicit:
+        path = trusted_root(p)
+        if not os.path.isdir(path):
+            raise FileNotFoundError(path)
+        return path
+    if not isinstance(p, str) or not p:
+        raise ValueError('Configuration datadir must be a nonempty path')
+    base_dir = trusted_root(base_dir)
+    parts = p.replace('\\', '/').split('/')
+    cur = base_dir
+    data_root = None
+    while True:
+        if os.path.basename(cur) == 'data':
+            data_root = cur
+            break
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    if 'data' in parts:
+        tail = parts[parts.index('data') + 1:]
+        if '..' in tail:
+            raise ValueError('Dataset paths cannot escape the data directory')
+        if data_root is not None:
+            anchored = confined_path(data_root, *tail)
+            if os.path.isdir(anchored):
+                return anchored
+    path = confined_path(data_root or base_dir, p) if os.path.isabs(p) else confined_path(base_dir, p)
+    if os.path.isdir(path):
+        return path
+    raise FileNotFoundError(f'Could not resolve datadir {p!r}; pass an explicit data_dir_path or --datadir')
 
 def _asbool(x) -> bool:
     return str(x).strip().lower() in ("1", "true", "yes", "y", "on")
@@ -113,27 +115,12 @@ def reorder(
 
 # Load config.txt file from results_path and get everything after { as a dictionary
 def load_config(results_path):
-    config = {}
-    with open(results_path + "config.txt", "r") as f:
-        for line in f:
-            if line.startswith("{"):
-                # Remove the first and last characters
-                line = line[1:-1]
-                line = line.split(",")
-                line = [i.strip() for i in line]
-                line = [i.split(":") for i in line]
-                line = [[i[0].strip(), i[1].strip()] for i in line]
-                # Convert to dictionary
-                config = {i[0]: i[1] for i in line}
-                # Correct double quotes
-                config = {i[1:-1]: config[i] for i in config}
-                config = {i: config[i].replace('"', "") for i in config}
-
-    return config
+    return read_cfg(confined_path(results_path, 'config.txt'))
 
 
 def load_model(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
+    quantile = quantile_value(config["quantile"])
     if config["net"] == "FCDD_CNN224_VGG_NOPT":
         net = FCDD_CNN224_VGG_NOPT((3, 224, 224), bias=True).to(_dev(device))
         # Load data and make predictions
@@ -145,9 +132,9 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             logger,
             config["objective"],
             int(config["gauss_std"]),
-            float(config["quantile"]),
+            quantile,
             64,
-            blur_heatmaps=bool(config["blur_heatmaps"]),
+            blur_heatmaps=_asbool(config["blur_heatmaps"]),
             device=_dev(device),
         )
     elif config["net"] == "VGG_BCE_CROP":
@@ -161,9 +148,9 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             logger,
             config["objective"],
             int(config["gauss_std"]),
-            float(config["quantile"]),
+            quantile,
             64,
-            blur_heatmaps=bool(config["blur_heatmaps"]),
+            blur_heatmaps=_asbool(config["blur_heatmaps"]),
             device=_dev(device),
         )
     elif config["net"] == "VGG_BCE":
@@ -177,9 +164,9 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             logger,
             config["objective"],
             int(config["gauss_std"]),
-            float(config["quantile"]),
+            quantile,
             64,
-            blur_heatmaps=bool(config["blur_heatmaps"]),
+            blur_heatmaps=_asbool(config["blur_heatmaps"]),
             device=_dev(device),
         )
 
@@ -194,9 +181,9 @@ def load_model(config: dict, logger: Logger, device: int = 0):
             logger,
             config["objective"],
             int(config["gauss_std"]),
-            float(config["quantile"]),
+            quantile,
             64,
-            blur_heatmaps=bool(config["blur_heatmaps"]),
+            blur_heatmaps=_asbool(config["blur_heatmaps"]),
             device=_dev(device),
         )
     else:
@@ -207,6 +194,7 @@ def load_model(config: dict, logger: Logger, device: int = 0):
 
 def load_model_ref(config: dict, logger: Logger, device: int = 0):
     """Create trainer from config file"""
+    quantile = quantile_value(config["quantile"])
     net = FCDD_REF_CNN224_VGG_NOPT((3, 224, 224), bias=True).to(_dev(device))
     # Load data and make predictions
     trainer = FCDDRefsTrainer(
@@ -217,9 +205,9 @@ def load_model_ref(config: dict, logger: Logger, device: int = 0):
         logger,
         config["objective"],
         int(config["gauss_std"]),
-        float(config["quantile"]),
+        quantile,
         64,
-        blur_heatmaps=bool(config["blur_heatmaps"]),
+        blur_heatmaps=_asbool(config["blur_heatmaps"]),
         device=_dev(device),
     )
 
@@ -242,7 +230,7 @@ def predict_and_evaluate(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
-    data_root = _resolve_path(config["datadir"], results_path)
+    data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
     print(f"[predictor] Using datadir: {data_root}")
 
     # Define Dataset
@@ -253,7 +241,7 @@ def predict_and_evaluate(
         supervise_mode=config["supervise_mode"],
         noise_mode=config["noise_mode"],
         online_supervision=truediv,
-        oe_limit=np.Infinity,
+        oe_limit=DEFAULT_OE_LIMIT,
         logger=logger,
         nominal_label=int(config["nominal_label"]),
     )
@@ -267,7 +255,7 @@ def predict_and_evaluate(
     trainer = load_model(config, logger, device)
 
     map_location = f"cuda:{device}" if torch.cuda.is_available() and isinstance(device, int) else "cpu"
-    trainer.load(results_path + "snapshot.pt")
+    trainer.load(confined_path(results_path, "snapshot.pt"))
 
     trainer.net.eval()
 
@@ -366,7 +354,7 @@ def predict_and_evaluate_ref(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
-    data_root = _resolve_path(config["datadir"], results_path)
+    data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
     print(f"[predictor] Using datadir: {data_root}")
     
     # Define Dataset
@@ -377,7 +365,7 @@ def predict_and_evaluate_ref(
         supervise_mode=config["supervise_mode"],
         noise_mode=config["noise_mode"],
         online_supervision=truediv,
-        oe_limit=np.Infinity,
+        oe_limit=DEFAULT_OE_LIMIT,
         logger=logger,
         nominal_label=int(config["nominal_label"]),
     )
@@ -389,7 +377,7 @@ def predict_and_evaluate_ref(
         d_test = ds.train_set
 
     trainer = load_model_ref(config, logger, device)
-    trainer.load(results_path + "snapshot.pt")
+    trainer.load(confined_path(results_path, "snapshot.pt"))
     trainer.net.eval()
 
     all_fnames = d_test.ref_df["Actual"]
@@ -478,7 +466,7 @@ def predict_and_evaluate_bce(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
-    data_root = _resolve_path(config["datadir"], results_path)
+    data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
     print(f"[predictor] Using datadir: {data_root}")
     
     # Define Dataset
@@ -489,7 +477,7 @@ def predict_and_evaluate_bce(
         supervise_mode=config["supervise_mode"],
         noise_mode=config["noise_mode"],
         online_supervision=truediv,
-        oe_limit=np.Infinity,
+        oe_limit=DEFAULT_OE_LIMIT,
         logger=logger,
         nominal_label=int(config["nominal_label"]),
     )
@@ -501,7 +489,7 @@ def predict_and_evaluate_bce(
         d_test = ds.train_set
 
     trainer = load_model(config, logger, device)
-    trainer.load(results_path + "snapshot.pt")
+    trainer.load(confined_path(results_path, "snapshot.pt"))
 
     # Send trainer net to device 1 using .to
     trainer.net.to(_dev(device)).eval()
@@ -588,7 +576,7 @@ def predict_and_evaluate_hsc(
     if data_dir_path is not None:
         config["datadir"] = data_dir_path
 
-    data_root = _resolve_path(config["datadir"], results_path)
+    data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
     print(f"[predictor] Using datadir: {data_root}")
     
     # Define Dataset
@@ -599,7 +587,7 @@ def predict_and_evaluate_hsc(
         supervise_mode=config["supervise_mode"],
         noise_mode=config["noise_mode"],
         online_supervision=truediv,
-        oe_limit=np.Infinity,
+        oe_limit=DEFAULT_OE_LIMIT,
         logger=logger,
         nominal_label=int(config["nominal_label"]),
     )
@@ -611,7 +599,7 @@ def predict_and_evaluate_hsc(
         d_test = ds.train_set
 
     trainer = load_model(config, logger, device)
-    trainer.load(results_path + "snapshot.pt")
+    trainer.load(confined_path(results_path, "snapshot.pt"))
     trainer.net.eval()
 
     # # Make predictions

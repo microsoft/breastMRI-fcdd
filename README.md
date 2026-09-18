@@ -33,9 +33,15 @@ publisher={Radiological Society of North America}
 
 ## 📦 Installation
 
-We recommend a Conda-first setup for pytorch. This avoids ABI mismatches like operator torchvision::nms does not exist.
+Use Python 3.12 or newer. The environment files install the same pinned,
+compatible PyTorch/torchvision pair as `requirements.txt`; do not mix it with
+older Conda PyTorch packages.
 
-Files used here live in python/ folder: python/environment.yml (GPU); python/environment-cpu.yml (CPU); python/requirements.txt (core-only)
+Files used here live in the `python/` folder: `environment.yml` (platform-default
+PyTorch wheels), `environment-cpu.yml` (CPU wheels), and `requirements.txt`
+(including PyTorch and torchvision). For GPU installations, use the matching
+versions from the [official PyTorch installer](https://pytorch.org/get-started/locally/)
+for your platform and driver; verify CUDA availability before training.
 
 To install FCDD, run the following commands:
 
@@ -44,7 +50,6 @@ To install FCDD, run the following commands:
     conda env create -f environment.yml # creates with name "fcdd" change if needed
     # conda env create -f environment-cpu.yml
     conda activate fcdd
-    pip install -r requirements.txt
     pip install -e . --no-deps
 
 After installation, check that CUDA is detected by PyTorch:
@@ -122,6 +127,9 @@ To perform inference, run:
 
 - `--device`: GPU device number to use for inference. Default: `0`.
 
+- `--datadir`: Explicit dataset root for prediction. Use this to override a
+  saved configuration when moving data outside the snapshot's `data` tree.
+
 **Inference Output:**
 - `predictions_results.json`: Model predictions, scores, labels, and metrics (ROC AUC, PR AUC)
 - Heatmap images: Anomaly heatmaps for each test image, saved in the output directory.
@@ -159,6 +167,8 @@ This variant of FCDD calibrate the normal class by using a reference image for e
 
 Reference mappings are defined in: `train_ref.csv` — for training pairs and `test_ref.csv` — for evaluation pairs
 Each file contains rows with columns `Actual` (path to the MIP), `Label` (0 normal, 1 anomalous), `Reference` (path to the reference MIP).
+Image paths must be relative to `datadir`, or absolute paths inside that root.
+Parent traversal, symbolic links, and junctions are rejected.
 
 
     python runners/run_scans_refs.py --datadir ../../data/MIP/fccd_data_patient_task0_cv_0 --net FCDD_REF_CNN224_VGG_NOPT --workers 6 --it 5 --epochs 200 --batch-size 32 --blur-heatmaps --objective fcddrefs --logdir-suffix task0_fcdd_ref --gpu 0
@@ -209,10 +219,63 @@ Alternative, you can run all six checkpoints with:
     bash test.sh
 
 
+## Input and artifact safety
+
+Command-line/API dataset and output roots are explicit, trusted choices. Run
+experiments in directories you control, without concurrent modification by
+other users. These checks are not an operating-system sandbox: use a separate
+account/container with filesystem, memory, CPU, and disk quotas when processing
+untrusted datasets or checkpoints.
+
+- Dataset CSVs and metadata cannot select images outside their configured
+  root. Logger names, subdirectories, class IDs, and iteration IDs cannot
+  redirect artifacts outside the chosen experiment directory. Restoring a
+  configuration with `extract_args` confines its output path to the caller's
+  existing `args.logdir`; select a different root explicitly, not through an
+  imported configuration.
+- Saved prediction paths resolve below the snapshot directory or its nearest
+  `data` ancestor. Historical `../../data/...` paths are supported only when
+  their suffix stays inside that tree. Use `--datadir` for other locations.
+- Checkpoints are loaded with `weights_only=True`, with no pickle fallback.
+  Old custom-object checkpoints must be re-exported as tensor/state
+  dictionaries in a trusted environment. Pretrained VGG11-BN weights use the
+  PyTorch user cache and a pinned SHA-256 digest, checked on both downloads and
+  cache hits. A mismatched cache entry produces an error rather than loading.
+- ImageNet archives are **not extracted automatically**. Prepare `meta.bin`
+  and the extracted `train`/`val` directories from trusted official archives
+  before use. The same rule applies to ImageNet outlier exposure.
+- Dataset means and unbiased standard deviations are computed batch by batch.
+  Empty nominal subsets and zero-variance channels raise actionable errors.
+  Ground-truth maps are decoded lazily; original-resolution evaluation checks
+  its output allocation before materializing maps.
+
+The default input policy in `fcdd.util.safety` rejects oversized inputs rather
+than silently truncating them. It allows up to 2,000,000 samples, 4,000,000
+traversed entries, 100,000 entries per directory, and 32 nested directories;
+64 MiB reference CSVs; 256 MiB metadata; and images up to 64 MiB encoded and
+16,777,216 pixels. Use a curated subset for larger collections, including a
+full ImageNet22k tree. Outlier exposure defaults to 100,000 samples.
+
+Training accepts 0-10,000 epochs, 0-32 loader workers, and at most 1,024 samples
+per accumulated batch. Quantiles must be finite and in `[0, 1]`. Visualization
+indices are global positions in the current result tensors, grouped by label;
+they must be in range and belong to the requested label.
+
+JSON artifacts have a 10 MB encoded limit and a bounded structure/NumPy-array
+conversion budget. Text buffers/files have a 10 MiB limit, original map/tensor
+artifacts have a 256 MiB limit, and checkpoints have a 2 GiB input limit.
+Oversized JSON and tensor writes fail without replacing an existing artifact.
+These per-input limits do not replace process-level resource quotas.
+
+Run the regression suite from `python/`:
+
+    python -m unittest discover -s tests -v
+
+Filesystem-link tests require a host that permits symbolic-link creation.
+
 ## Disclaimer / Notices 
 
 **Disclaimer:** This code, model and sample data are provided As-Is and are intended for research and model development exploration. The models, code and examples are not designed or intended to be deployed in clinical settings As-Is nor for use in the diagnosis or treatment of any health or medical condition, and the individual models' performances for such purposes have not been established. You bear sole responsibility and liability for any use of the models, code and examples, including verification of outputs and incorporation into any product or service intended for a medical purpose or to inform clinical decision-making, compliance with applicable healthcare laws and regulations, and obtaining any necessary clearances or approvals.
 
 **Trademarks**: This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow Microsoft's Trademark & Brand Guidelines. Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
-
 

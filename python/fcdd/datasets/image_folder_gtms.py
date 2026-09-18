@@ -17,6 +17,8 @@ from fcdd.datasets.bases import GTMapADDataset, GTSubset
 from fcdd.datasets.preprocessing import get_target_label_idx, MultiCompose
 from fcdd.datasets.image_folder import ADImageFolderDataset, ImageFolderDataset
 from fcdd.util.logging import Logger
+from fcdd.datasets.safe_io import image_size, load_image
+from fcdd.util.safety import MAX_TENSOR_BYTES, confined_path
 
 
 def extract_custom_classes(datapath: str) -> List[str]:
@@ -170,8 +172,10 @@ class ImageFolderDatasetGTM(ImageFolderDataset, GTMapADDataset):
         self.anomalous_label = anomalous_label
         self.img_gtm_transform = img_gtm_transform
         gtmroot = f"{self.root}_maps"
+        self.gtmroot = confined_path(pt.dirname(self.root), pt.basename(gtmroot))
         self.gtm_samples = [
-            (path.replace(self.root, gtmroot), t) if pt.exists(path.replace(self.root, gtmroot)) else (None, t)
+            (confined_path(self.gtmroot, pt.relpath(path, self.root)), t)
+            if pt.exists(confined_path(self.gtmroot, pt.relpath(path, self.root))) else (None, t)
             for (path, _), t in zip(self.samples, self.anomaly_labels)
         ]
 
@@ -186,26 +190,27 @@ class ImageFolderDatasetGTM(ImageFolderDataset, GTMapADDataset):
             replace = random.random() < 0.5
             if replace:
                 if self.supervise_mode not in ['malformed_normal', 'malformed_normal_gt']:
-                    img, _, target = self.all_transform(torch.empty(self.raw_shape), None, target, replace=replace)
+                    img, gt, target = self.all_transform(torch.empty(self.raw_shape), None, target, replace=replace)
                 else:
                     path, _ = self.samples[index]
                     img = to_tensor(self.loader(path)).mul(255).byte()
                     img, gt, target = self.all_transform(img, None, target, replace=replace)
                 img = to_pil_image(img)
-                gt = gt.mul(255).byte() if gt.dtype != torch.uint8 else gt
-                gt = to_pil_image(gt) if gt is not None else None
+                if gt is not None:
+                    gt = gt.mul(255).byte() if gt.dtype != torch.uint8 else gt
+                    gt = to_pil_image(gt)
             else:
                 path, _ = self.samples[index]
                 gt_path, _ = self.gtm_samples[index]
                 img = self.loader(path)
                 if gt_path is not None:
-                    gt = self.loader(gt_path)
+                    gt = load_image(gt_path, root=self.gtmroot)
         else:
             path, _ = self.samples[index]
             gt_path, _ = self.gtm_samples[index]
             img = self.loader(path)
             if gt_path is not None:
-                gt = self.loader(gt_path)
+                gt = load_image(gt_path, root=self.gtmroot)
 
         if gt is None:
             # gt is assumed to be 1 for anoms always (regardless of the anom_label), since the supervisors work that way
@@ -221,9 +226,9 @@ class ImageFolderDatasetGTM(ImageFolderDataset, GTMapADDataset):
             img = self.transform(img)
 
         if self.nominal_label != 0:
-            gt[gt == 0] = -3  # -3 is chosen arbitrarily here
+            nominal = gt == 0
             gt[gt == 1] = self.anomalous_label
-            gt[gt == -3] = self.nominal_label
+            gt[nominal] = self.nominal_label
 
         gt = gt[:1]  # cut off redundant channels
 
@@ -239,12 +244,20 @@ class ImageFolderDatasetGTM(ImageFolderDataset, GTMapADDataset):
         assert self.all_transform is None, 'all_transform would be skipped here'
         assert all([isinstance(t, (transforms.Resize, transforms.ToTensor)) for t in self.img_gtm_transform.transforms]), \
             "if other transforms than resize are used, the original-sized ground-truth maps do not match the heatmaps "
-        orig_gtmaps = [
-            to_tensor(self.loader(g)) if g is not None
-            else ((torch.ones(self.raw_shape) * self.nominal_label) if t == self.nominal_label else None)
-            for g, t in self.gtm_samples
-        ]
-        assert all([g is not None for g in orig_gtmaps]), 'for some samples no ground-truth maps were found'
-        minsize = min([min(g.shape[-2:]) for g in orig_gtmaps])
-        orig_gtmaps = torch.cat([interpolate(g.unsqueeze(0), (minsize, minsize), mode='nearest') for g in orig_gtmaps])[:, :1]
-        return orig_gtmaps
+        if not self.gtm_samples:
+            raise ValueError('No ground-truth maps are available')
+        minsize = None
+        for path, target in self.gtm_samples:
+            assert path is not None or target == self.nominal_label, 'for some samples no ground-truth maps were found'
+            size = image_size(path, root=self.gtmroot) if path is not None else self.raw_shape[-2:]
+            minsize = min(size) if minsize is None else min(minsize, *size)
+        if len(self.gtm_samples) * minsize * minsize * 4 > MAX_TENSOR_BYTES:
+            raise ValueError('Ground-truth map output exceeds the tensor budget')
+        result = torch.empty((len(self.gtm_samples), 1, minsize, minsize))
+        for index, (path, target) in enumerate(self.gtm_samples):
+            if path is None:
+                result[index].fill_(self.nominal_label)
+            else:
+                gt = to_tensor(load_image(path, root=self.gtmroot))[:1]
+                result[index] = interpolate(gt.unsqueeze(0), (minsize, minsize), mode='nearest')[0]
+        return result
