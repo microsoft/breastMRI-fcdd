@@ -17,7 +17,7 @@ from fcdd.datasets.preprocessing import get_target_label_idx
 from fcdd.util.logging import Logger
 from torch.utils.data import Subset
 from torchvision.datasets.imagenet import verify_str_arg
-from fcdd.util.safety import MAX_METADATA_BYTES, bounded_reader, confined_path, prepared_imagenet, trusted_root
+from fcdd.util.safety import MAX_METADATA_BYTES, bounded_reader, confined_path, prepared_imagenet, canonical_root_path
 from torchvision.transforms.functional import to_tensor, to_pil_image
 
 ROOT = pt.join(pt.dirname(__file__), '..')
@@ -141,7 +141,7 @@ class PathsMetaFileImageNet(MyImageFolder):
     Does not yet implement get_item.
     """
     def __init__(self, root, split='train', **kwargs):
-        root = self.root = trusted_root(root)
+        root = self.root = canonical_root_path(root)
         self.split = verify_str_arg(split, "split", ("train", "val"))
 
         self.parse_archives()

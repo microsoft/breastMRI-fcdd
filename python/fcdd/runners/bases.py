@@ -18,7 +18,7 @@ from fcdd.training.super_trainer import SuperTrainer
 from fcdd.util.logging import plot_many_roc, time_format
 from fcdd.util.metrics import mean_roc
 from fcdd.util.safety import (
-    MAX_LOG_BYTES, bounded_int, bounded_reader, confined_path, filename, trusted_root, validate_resources,
+    MAX_LOG_BYTES, bounded_int, bounded_reader, confined_path, filename, canonical_root_path, validate_resources,
 )
 
 
@@ -146,7 +146,7 @@ class BaseRunner(object):
 
     def get_base_logdir(self):
         """ returns the actualy log directory """
-        return trusted_root(self.args.logdir.replace('{t}', time_format(self.start)))
+        return canonical_root_path(self.args.logdir.replace('{t}', time_format(self.start)))
 
     def arg_to_ae(self, backup=True, restore=True):
         """ transfers a part of the parameters to train an autoencoder instead, with reconstruction loss heatmaps """
@@ -212,7 +212,7 @@ class SeedsRunner(BaseRunner):
         results = defaultdict(lambda: [])
         kwargs = dict(kwargs)
         bounded_int(it, 'iterations', 1, 1000)
-        logdir = trusted_root(kwargs.pop('logdir').replace('{t}', time_format(self.start)))
+        logdir = canonical_root_path(kwargs.pop('logdir').replace('{t}', time_format(self.start)))
         viz_ids = kwargs.pop('viz_ids')
         its = range(it)
         if 'its_restrictions' in kwargs:
@@ -255,7 +255,7 @@ class ClassesRunner(SeedsRunner):
         results = defaultdict(lambda: [])
         kwargs = dict(kwargs)
         it = kwargs.pop('it')
-        logdir = trusted_root(kwargs['logdir'].replace('{t}', time_format(self.start)))
+        logdir = canonical_root_path(kwargs['logdir'].replace('{t}', time_format(self.start)))
         class_count = no_classes(kwargs['dataset'])
         classes = range(class_count)
         if 'cls_restrictions' in kwargs:

@@ -59,7 +59,8 @@ def validate_resources(config):
         quantile_value(config['quantile'])
 
 
-def trusted_root(path):
+def canonical_root_path(path):
+    """Normalize a caller-selected filesystem root; this does not establish trust."""
     if not isinstance(path, (str, os.PathLike)) or not os.fspath(path):
         raise ValueError('An explicit nonempty root directory is required')
     return os.path.realpath(os.path.abspath(os.path.expanduser(path)))
@@ -71,7 +72,7 @@ def is_link(path):
 
 def confined_path(root, *parts):
     """Resolve a descendant, rejecting traversal, links, and foreign drive syntax."""
-    root = trusted_root(root)
+    root = canonical_root_path(root)
     path = root
     for part in parts:
         part = os.fspath(part)

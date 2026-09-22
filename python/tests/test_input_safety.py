@@ -1,4 +1,5 @@
 import csv
+from contextlib import redirect_stdout
 import hashlib
 import io
 import json
@@ -29,6 +30,7 @@ from fcdd.datasets.online_supervisor import OnlineSupervisor, repeat_loader
 from fcdd.datasets.outlier_exposure.imagenet import MyImageFolder, OEImageNet, OEImageNet22k
 from fcdd.datasets.preprocessing import MultiCompose
 from fcdd.models import weights
+from fcdd.runners import predictor
 from fcdd.runners.bases import ClassesRunner, SeedsRunner, extract_viz_ids
 from fcdd.runners.argparse_configs import DefaultConfig
 from fcdd.runners.predictor import _resolve_path, load_config, load_model, load_model_ref
@@ -59,6 +61,17 @@ class TemporaryTest(unittest.TestCase):
 
 
 class PathTests(TemporaryTest):
+    def test_canonical_root_path_preserves_normalization(self):
+        path = self.root / 'nested' / '..' / 'images'
+        self.assertEqual(safety.canonical_root_path(path), str(self.root / 'images'))
+        self.assertEqual(safety.canonical_root_path('.'), os.path.realpath(os.getcwd()))
+        with patch('fcdd.util.safety.os.path.expanduser', return_value=str(self.root / 'images')) as expand:
+            self.assertEqual(safety.canonical_root_path('~/images'), str(self.root / 'images'))
+            expand.assert_called_once_with('~/images')
+        for invalid in ('', None, 42):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                safety.canonical_root_path(invalid)
+
     def test_confined_paths_accept_nested_and_contained_absolute(self):
         expected = str(self.root / 'nested' / 'output')
         self.assertEqual(safety.confined_path(self.root, 'nested', 'output'), expected)
@@ -322,6 +335,28 @@ class MetadataTests(TemporaryTest):
         self.assertEqual(first.samples, second.samples)
         self.assertEqual(first[0][0].size, (8, 8))
 
+    def test_metadata_status_does_not_expose_paths_to_console_or_log(self):
+        for use_logger in (False, True):
+            with self.subTest(use_logger=use_logger):
+                self.meta.unlink(missing_ok=True)
+                logger = Logger(str(self.root / 'logs')) if use_logger else None
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    first = MyImageFolder(str(self.dataset_root), logger=logger)
+                    second = MyImageFolder(str(self.dataset_root), logger=logger)
+                self.assertEqual(first.samples, second.samples)
+                for text in (output.getvalue(), logger.printlog if logger else ''):
+                    self.assertNotIn(str(self.root), text)
+                    self.assertNotIn(str(self.meta), text)
+                    self.assertNotIn('meta.json', text)
+                self.assertIn('metadata cache is missing', output.getvalue())
+                self.assertIn('loading cached metadata', output.getvalue())
+                if logger is not None:
+                    logger.log_prints()
+                    logged = (self.root / 'logs' / 'print.log').read_text(encoding='utf-8')
+                    self.assertIn('loading cached metadata', logged)
+                    self.assertNotIn(str(self.root), logged)
+
     def test_metadata_schema_size_class_and_path_validation(self):
         for value in ({}, [[str(self.sample), True]], [[str(self.sample), 7]],
                       [[str(self.sample)]], [['../outside.png', 0]],
@@ -537,6 +572,28 @@ class LoggerTests(TemporaryTest):
 
 
 class RunnerTests(TemporaryTest):
+    def test_prediction_status_omits_path_without_changing_dataset_selection(self):
+        dataset_root = self.root / 'dataset-location'
+        dataset_root.mkdir()
+        config = dict(datadir=str(dataset_root), normal_class=0, preproc='none',
+                      supervise_mode='unsupervised', noise_mode='gaussian', nominal_label=0)
+        for predict, dataset_type in (
+            (predictor.predict_and_evaluate, 'ADImageFolderDataset'),
+            (predictor.predict_and_evaluate_ref, 'ADImageRefDataset'),
+            (predictor.predict_and_evaluate_bce, 'ADImageFolderDataset'),
+            (predictor.predict_and_evaluate_hsc, 'ADImageFolderDataset'),
+        ):
+            for explicit in (False, True):
+                with self.subTest(predict=predict.__name__, explicit=explicit):
+                    output = io.StringIO()
+                    with patch.object(predictor, 'load_config', return_value=config.copy()):
+                        with patch.object(predictor, dataset_type, side_effect=RuntimeError('stop before inference')) as dataset:
+                            with redirect_stdout(output), self.assertRaisesRegex(RuntimeError, 'stop before inference'):
+                                predict(str(self.root), str(self.root / 'logs'),
+                                        data_dir_path=str(dataset_root) if explicit else None)
+                    self.assertEqual(dataset.call_args.kwargs['root'], str(dataset_root))
+                    self.assertEqual(output.getvalue(), '[predictor] Dataset directory resolved.\n')
+
     def test_configuration_is_bounded_and_handles_real_json(self):
         value = {'datadir': r'C:\data\my,images', 'quantile': .97, 'blur_heatmaps': False}
         path = self.root / 'config.txt'

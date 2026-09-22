@@ -11,7 +11,7 @@ from torchvision.datasets.folder import has_file_allowed_extension
 
 from fcdd.util.safety import (
     MAX_DEPTH, MAX_DIRECTORY_ENTRIES, MAX_ENTRIES, MAX_IMAGE_BYTES,
-    MAX_IMAGE_PIXELS, MAX_SAMPLES, bounded_reader, confined_path, is_link, trusted_root,
+    MAX_IMAGE_PIXELS, MAX_SAMPLES, bounded_reader, confined_path, is_link, canonical_root_path,
 )
 
 
@@ -35,7 +35,7 @@ def find_classes(root):
 
 
 def make_dataset(root, class_to_idx, extensions=None, is_valid_file=None, allow_empty=False):
-    root = trusted_root(root)
+    root = canonical_root_path(root)
     if (extensions is None) == (is_valid_file is None):
         raise ValueError('Specify exactly one of extensions or is_valid_file')
     if is_valid_file is None:
@@ -94,7 +94,7 @@ class BoundedImageFolder(ImageFolder):
     make_dataset = staticmethod(make_dataset)
 
     def __init__(self, root, **kwargs):
-        root = trusted_root(root)
+        root = canonical_root_path(root)
         super().__init__(root, loader=partial(load_image, root=root), **kwargs)
 
 

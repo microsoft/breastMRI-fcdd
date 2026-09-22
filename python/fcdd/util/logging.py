@@ -23,7 +23,7 @@ from fcdd.util import DefaultList, CircleList, NumpyEncoder
 from fcdd.util.metrics import mean_roc
 from fcdd.util.safety import (
     MAX_EPOCHS, MAX_LOG_BYTES, MAX_TENSOR_BYTES, append_text, atomic_writer,
-    bounded_int, bounded_json, confined_path, filename, trusted_root,
+    bounded_int, bounded_json, confined_path, filename, canonical_root_path,
 )
 from matplotlib import cm
 from torch import Tensor
@@ -110,7 +110,7 @@ class Logger(object):
         self.start = int(time.time())
         self.exp_start_time = self.start if exp_start_time is None else exp_start_time
         bounded_int(window, 'logging window', 1, 1000)
-        self.dir = trusted_root(logdir.replace('{t}', time_format(self.exp_start_time)))
+        self.dir = canonical_root_path(logdir.replace('{t}', time_format(self.exp_start_time)))
         if not pt.exists(os.path.dirname(self.dir)):
             os.makedirs(os.path.dirname(self.dir))
         self.t = time.time()
@@ -161,7 +161,7 @@ class Logger(object):
         self._scalars = {}
         self._steps = {}
         if logdir is not None:
-            self.dir = trusted_root(logdir.replace('{t}', time_format(self.exp_start_time)))
+            self.dir = canonical_root_path(logdir.replace('{t}', time_format(self.exp_start_time)))
             if not pt.exists(os.path.dirname(self.dir)):
                 os.makedirs(os.path.dirname(self.dir))
 

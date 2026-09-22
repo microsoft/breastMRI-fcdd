@@ -19,7 +19,7 @@ from fcdd.util.logging import Logger
 from fcdd.datasets.safe_io import find_classes, load_image, make_dataset
 from fcdd.util.safety import (
     DEFAULT_OE_LIMIT, MAX_METADATA_BYTES, MAX_SAMPLES, bounded_int, bounded_json,
-    bounded_reader, confined_path, prepared_imagenet, trusted_root, validate_image_shape,
+    bounded_reader, confined_path, prepared_imagenet, canonical_root_path, validate_image_shape,
 )
 from torch.utils.data import DataLoader
 from torchvision.datasets import DatasetFolder
@@ -103,7 +103,7 @@ class MyImageFolder(DatasetFolder):
     find_classes = staticmethod(find_classes)
 
     def __init__(self, root, transform=None, target_transform=None, is_valid_file=None, logger=None):
-        self.root = trusted_root(root)
+        self.root = canonical_root_path(root)
         self.metafile = confined_path(self.root, 'meta.json')
         self.transform = transform
         self.target_transform = target_transform
@@ -128,14 +128,14 @@ class MyImageFolder(DatasetFolder):
         self.imgs = self.samples
 
     def make_dataset(self, dir, class_to_idx, extensions=None, is_valid_file=None):
-        dir = trusted_root(dir)
+        dir = canonical_root_path(dir)
         metafile = confined_path(dir, self.metafile)
         if (extensions is None) == (is_valid_file is None):
             raise ValueError('Specify exactly one of extensions or is_valid_file')
         if is_valid_file is None:
             is_valid_file = partial(has_file_allowed_extension, extensions=extensions)
         if os.path.exists(metafile):
-            self.logprint('ImageFolder dataset is loading metadata from {}...'.format(metafile), fps=False)
+            self.logprint('ImageFolder dataset is loading cached metadata...', fps=False)
             with bounded_reader(metafile, MAX_METADATA_BYTES, text=True) as text:
                 cached = json.loads(text)
             if not isinstance(cached, list) or len(cached) > MAX_SAMPLES:
@@ -154,7 +154,7 @@ class MyImageFolder(DatasetFolder):
             self.logprint('ImageFolder dataset has loaded metadata.')
         else:
             self.logprint(
-                'ImageFolder dataset could not find metafile at {}. Creating it instead...'.format(self.metafile),
+                'ImageFolder dataset metadata cache is missing. Creating it instead...',
                 fps=False
             )
             images = make_dataset(dir, class_to_idx, is_valid_file=is_valid_file)
@@ -274,7 +274,7 @@ class OEImageNet22k(MyImageNet22K):
         """
         validate_image_shape(size)
         bounded_int(limit_var, 'oe_limit', 1, MAX_SAMPLES)
-        root = trusted_root(root)
+        root = canonical_root_path(root)
         root = pt.dirname(root) if pt.basename(root) == 'imagenet' else root
         root = confined_path(root, 'imagenet22k', 'fall11_whole_extracted')
         self.root = root

@@ -13,7 +13,7 @@ from typing import List
 
 import torch
 from fcdd.util.logging import Logger
-from fcdd.util.safety import MAX_CONFIG_BYTES, bounded_reader, confined_path, trusted_root, validate_resources
+from fcdd.util.safety import MAX_CONFIG_BYTES, bounded_reader, confined_path, canonical_root_path, validate_resources
 
 
 def read_cfg(cfg_file: str):
@@ -31,7 +31,7 @@ def read_cfg(cfg_file: str):
 def extract_args(args: Namespace, cfg: dict):
     """ Extracts all parameters found in the cfg configuration dictionary and put them in the argparse Namespace """
     validate_resources(cfg)
-    output_root = trusted_root(args.logdir)
+    output_root = canonical_root_path(args.logdir)
     config_logdir = cfg['logdir']
     logdir = output_root if config_logdir == args.logdir else confined_path(output_root, config_logdir)
     args.bias = cfg['bias']

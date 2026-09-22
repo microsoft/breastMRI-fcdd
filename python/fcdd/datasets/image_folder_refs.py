@@ -16,7 +16,7 @@ from fcdd.datasets.online_supervisor import OnlineSupervisor
 from fcdd.datasets.preprocessing import get_target_label_idx, MultiCompose, ImgTransformWrap
 from fcdd.util.logging import Logger
 from fcdd.datasets.safe_io import channel_statistics, find_classes, load_image
-from fcdd.util.safety import MAX_CSV_BYTES, MAX_SAMPLES, bounded_reader, confined_path, trusted_root, validate_image_shape
+from fcdd.util.safety import MAX_CSV_BYTES, MAX_SAMPLES, bounded_reader, confined_path, canonical_root_path, validate_image_shape
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.transforms.functional import to_pil_image, to_tensor
@@ -255,7 +255,7 @@ class DatasetREF(ThreeReturnsDataset):
         root=None,
     ):
         validate_image_shape((1, *raw_shape))
-        self.root = trusted_root(root if root is not None else pt.dirname(pt.abspath(ref_path)))
+        self.root = canonical_root_path(root if root is not None else pt.dirname(pt.abspath(ref_path)))
         ref_path = confined_path(self.root, pt.abspath(ref_path))
         with bounded_reader(ref_path, MAX_CSV_BYTES) as reader:
             self.ref_df = pd.read_csv(reader, nrows=MAX_SAMPLES + 1)

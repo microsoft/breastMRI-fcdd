@@ -34,7 +34,7 @@ from fcdd.training.fcdd_refs import FCDDRefsTrainer
 from fcdd.models.fcdd_ref_cnn_224 import FCDD_REF_CNN224_VGG_NOPT
 from fcdd.datasets.image_folder_refs import ADImageRefDataset
 from fcdd.util.io import read_cfg
-from fcdd.util.safety import DEFAULT_OE_LIMIT, confined_path, quantile_value, trusted_root
+from fcdd.util.safety import DEFAULT_OE_LIMIT, confined_path, quantile_value, canonical_root_path
 
 def _dev(device):
     if isinstance(device,int):
@@ -50,13 +50,13 @@ def _dev(device):
 
 def _resolve_path(p: str, base_dir: str, explicit=False) -> str:
     if explicit:
-        path = trusted_root(p)
+        path = canonical_root_path(p)
         if not os.path.isdir(path):
             raise FileNotFoundError(path)
         return path
     if not isinstance(p, str) or not p:
         raise ValueError('Configuration datadir must be a nonempty path')
-    base_dir = trusted_root(base_dir)
+    base_dir = canonical_root_path(base_dir)
     parts = p.replace('\\', '/').split('/')
     cur = base_dir
     data_root = None
@@ -231,7 +231,7 @@ def predict_and_evaluate(
         config["datadir"] = data_dir_path
 
     data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
-    print(f"[predictor] Using datadir: {data_root}")
+    print("[predictor] Dataset directory resolved.")
 
     # Define Dataset
     ds = ADImageFolderDataset(
@@ -355,7 +355,7 @@ def predict_and_evaluate_ref(
         config["datadir"] = data_dir_path
 
     data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
-    print(f"[predictor] Using datadir: {data_root}")
+    print("[predictor] Dataset directory resolved.")
     
     # Define Dataset
     ds = ADImageRefDataset(
@@ -467,7 +467,7 @@ def predict_and_evaluate_bce(
         config["datadir"] = data_dir_path
 
     data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
-    print(f"[predictor] Using datadir: {data_root}")
+    print("[predictor] Dataset directory resolved.")
     
     # Define Dataset
     ds = ADImageFolderDataset(
@@ -577,7 +577,7 @@ def predict_and_evaluate_hsc(
         config["datadir"] = data_dir_path
 
     data_root = _resolve_path(config["datadir"], results_path, explicit=data_dir_path is not None)
-    print(f"[predictor] Using datadir: {data_root}")
+    print("[predictor] Dataset directory resolved.")
     
     # Define Dataset
     ds = ADImageFolderDataset(
