@@ -25,6 +25,8 @@ def main():
                        help='Output directory for results')
     parser.add_argument('--device', type=int, default=0,
                        help='GPU device number')
+    parser.add_argument('--datadir', type=str, default=None,
+                       help='Explicit trusted dataset root, overriding the saved configuration')
     
     args = parser.parse_args()
     
@@ -71,28 +73,28 @@ def main():
             results_path=snapshot_path, 
             log_path=target_path, 
             on_train=False,
-            device=args.device
+            device=args.device, data_dir_path=args.datadir
         )
     elif args.model == 'bce':
         results_test, trainer = predict_and_evaluate_bce(
             results_path=snapshot_path, 
             log_path=target_path, 
             on_train=False,
-            device=args.device
+            device=args.device, data_dir_path=args.datadir
         )
     elif args.model == 'hsc':
         results_test, trainer = predict_and_evaluate_hsc(
             results_path=snapshot_path, 
             log_path=target_path, 
             on_train=False,
-            device=args.device
+            device=args.device, data_dir_path=args.datadir
         )
     elif args.model == 'fcdd_ref':
         results_test, trainer = predict_and_evaluate_ref(
             results_path=snapshot_path, 
             log_path=target_path, 
             on_train=False,
-            device=args.device
+            device=args.device, data_dir_path=args.datadir
         )
     
     print("Predictions completed.")

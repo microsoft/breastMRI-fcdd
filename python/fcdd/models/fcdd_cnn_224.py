@@ -2,13 +2,10 @@
 # Copyright (c) 2025 Microsoft Corporation (FCDD for breast cancer detection)
 # Licensed under the MIT License.
 
-import os.path as pt
-
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 from fcdd.models.bases import FCDDNet, BaseNet
-from torch.hub import load_state_dict_from_url
+from fcdd.models.weights import load_vgg11_bn_weights
 
 
 class FCDD_CNN224_VGG_NOPT(FCDDNet):
@@ -68,10 +65,7 @@ class FCDD_CNN224_VGG(FCDDNet):
     def __init__(self, in_shape, **kwargs):
         super().__init__(in_shape, **kwargs)
         assert self.bias, "VGG net is only supported with bias atm!"
-        state_dict = load_state_dict_from_url(
-            torchvision.models.vgg.model_urls["vgg11_bn"],
-            model_dir=pt.join(pt.dirname(__file__), "..", "..", "..", "data", "models"),
-        )
+        state_dict = load_vgg11_bn_weights()
         features_state_dict = {
             k[9:]: v for k, v in state_dict.items() if k.startswith("features")
         }

@@ -15,17 +15,15 @@ from fcdd.datasets.bases import GTSubset, TorchvisionDataset, ThreeReturnsDatase
 from fcdd.datasets.online_supervisor import OnlineSupervisor
 from fcdd.datasets.preprocessing import get_target_label_idx, MultiCompose, ImgTransformWrap
 from fcdd.util.logging import Logger
+from fcdd.datasets.safe_io import channel_statistics, find_classes, load_image
+from fcdd.util.safety import MAX_CSV_BYTES, MAX_SAMPLES, bounded_reader, confined_path, canonical_root_path, validate_image_shape
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, Subset
-from torchvision.datasets.folder import default_loader
 from torchvision.transforms.functional import to_pil_image, to_tensor
 
 
 def extract_custom_classes(datapath: str) -> List[str]:
-    dir = os.path.join(datapath, "custom", "test")
-    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
-    classes.sort()
-    return classes
+    return find_classes(confined_path(datapath, "custom", "test"))[0]
 
 
 class ADImageRefDataset(TorchvisionDataset):
@@ -64,8 +62,8 @@ class ADImageRefDataset(TorchvisionDataset):
         assert (
             online_supervision
         ), "Artificial anomaly generation for custom datasets needs to be online"
-        self.trainpath = pt.join(root, self.base_folder, "train_ref.csv")
-        self.testpath = pt.join(root, self.base_folder, "test_ref.csv")
+        self.trainpath = confined_path(root, self.base_folder, "train_ref.csv")
+        self.testpath = confined_path(root, self.base_folder, "test_ref.csv")
         super().__init__(root, logger=logger)
 
         self.n_classes = 2  # 0: normal, 1: outlier
@@ -153,6 +151,7 @@ class ADImageRefDataset(TorchvisionDataset):
             transform=transform,
             target_transform=self.target_transform,
             all_transform=self.all_transform,
+            root=self.root,
         )
         if supervise_mode == "other":  # (semi)-supervised setting
             self.balance_dataset()
@@ -175,6 +174,7 @@ class ADImageRefDataset(TorchvisionDataset):
             normal_classes=self.normal_classes,
             transform=test_transform,
             target_transform=self.target_transform,
+            root=self.root,
         )
 
     def balance_dataset(self, gtm=False):
@@ -221,6 +221,7 @@ class ADImageRefDataset(TorchvisionDataset):
                 if x in self.outlier_classes
                 else self.nominal_label
             ),
+            root=self.root,
         )
         ds = Subset(
             ds,
@@ -232,15 +233,9 @@ class ADImageRefDataset(TorchvisionDataset):
             .tolist(),
         )
         loader = DataLoader(
-            dataset=ds, batch_size=2, shuffle=False, num_workers=4, pin_memory=False
+            dataset=ds, batch_size=2, shuffle=False, num_workers=0, pin_memory=False
         )
-        all_x = []
-        for x, _, x_ref in loader:
-            all_x.append(x)
-        all_x = torch.cat(all_x)
-        return all_x.permute(1, 0, 2, 3).flatten(1).mean(1), all_x.permute(
-            1, 0, 2, 3
-        ).flatten(1).std(1)
+        return channel_statistics(loader)
 
 
 class DatasetREF(ThreeReturnsDataset):
@@ -248,7 +243,7 @@ class DatasetREF(ThreeReturnsDataset):
 
     def __init__(
         self,
-        ref_path: str,  # .csv file with absolute paths
+        ref_path: str,
         supervise_mode: str,
         raw_shape: Tuple[int, int, int],
         nominal_label: int,  # not used
@@ -257,8 +252,23 @@ class DatasetREF(ThreeReturnsDataset):
         target_transform=None,
         normal_classes=None,
         all_transform=None,
+        root=None,
     ):
-        self.ref_df = pd.read_csv(ref_path)
+        validate_image_shape((1, *raw_shape))
+        self.root = canonical_root_path(root if root is not None else pt.dirname(pt.abspath(ref_path)))
+        ref_path = confined_path(self.root, pt.abspath(ref_path))
+        with bounded_reader(ref_path, MAX_CSV_BYTES) as reader:
+            self.ref_df = pd.read_csv(reader, nrows=MAX_SAMPLES + 1)
+        if len(self.ref_df) > MAX_SAMPLES:
+            raise ValueError('Reference CSV exceeds the sample budget')
+        if not {'Actual', 'Reference', 'Label'}.issubset(self.ref_df.columns):
+            raise ValueError('Reference CSV must contain Actual, Reference, and Label columns')
+        if not self.ref_df.Label.isin([0, 1]).all():
+            raise ValueError('Reference labels must be 0 or 1')
+        for column in ('Actual', 'Reference'):
+            if not self.ref_df[column].map(lambda value: isinstance(value, str) and bool(value)).all():
+                raise ValueError(f'{column} must contain nonempty image paths')
+            self.ref_df[column] = self.ref_df[column].map(lambda path: confined_path(self.root, path))
         self.transform = transform
         self.target_transform = target_transform
         self.ref_path = self.ref_df.Reference
@@ -278,7 +288,7 @@ class DatasetREF(ThreeReturnsDataset):
 
     def __getitem__(self, index: int) -> Tuple[Tensor, int, Tensor]:
         target = self.anomaly_labels[index]
-        ref_img = default_loader(self.ref_path[index])
+        ref_img = load_image(self.ref_path[index], root=self.root)
 
         if self.target_transform is not None:
             pass  # already applied since we use self.anomaly_labels instead of self.targets
@@ -295,18 +305,18 @@ class DatasetREF(ThreeReturnsDataset):
                     )
                 else:
                     path, _ = self.samples[index]
-                    img = to_tensor(default_loader(path)).mul(255).byte()
+                    img = to_tensor(load_image(path, root=self.root)).mul(255).byte()
                     img, _, target = self.all_transform(
                         img, None, target, replace=replace
                     )
                 img = to_pil_image(img)
             else:
                 path, _ = self.samples[index]
-                img = default_loader(path)
+                img = load_image(path, root=self.root)
 
         else:
             path, _ = self.samples[index]
-            img = default_loader(path)
+            img = load_image(path, root=self.root)
 
         if self.transform is not None:
             img, ref_img = self.transform((img, ref_img))
