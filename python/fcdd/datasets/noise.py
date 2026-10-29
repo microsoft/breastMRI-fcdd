@@ -6,7 +6,7 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from kornia import gaussian_blur2d
+from kornia.filters import gaussian_blur2d
 from scipy import signal
 from skimage.transform import rotate as im_rotate
 
@@ -35,13 +35,13 @@ def gkern(k: int, std: float = None):
     elif isinstance(std, str):
         std = float(std)
     if k % 2 == 0:
-        # if kernel size is even, signal.gaussian returns center values sampled from gaussian at x=-1 and x=1
+        # if kernel size is even, the window has center values sampled from gaussian at x=-1 and x=1
         # which is much less than 1.0 (depending on std). Instead, sample with kernel size k-1 and duplicate center
         # value, which is 1.0. Then divide whole signal by 2, because the duplicate results in a too high signal.
-        gkern1d = signal.gaussian(k - 1, std=std).reshape(k - 1, 1)
+        gkern1d = signal.windows.gaussian(k - 1, std=std).reshape(k - 1, 1)
         gkern1d = np.insert(gkern1d, (k - 1) // 2, gkern1d[(k - 1) // 2]) / 2
     else:
-        gkern1d = signal.gaussian(k, std=std).reshape(k, 1)
+        gkern1d = signal.windows.gaussian(k, std=std).reshape(k, 1)
     gkern2d = np.outer(gkern1d, gkern1d)
     return gkern2d
 

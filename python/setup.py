@@ -20,7 +20,7 @@ package_data = {
 }
 
 with open(pt.join(PACKAGE_DIR, 'requirements.txt')) as f:
-    dependencies = [l.strip(' \n') for l in f]
+    dependencies = [line.strip() for line in f if line.strip() and not line.lstrip().startswith('#')]
 
 setup(
     name='fcdd',
@@ -28,10 +28,11 @@ setup(
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
-        'Programming Language :: Python :: 3.6'
+        'Programming Language :: Python :: 3.12'
     ],
     keywords='deep-learning anomaly-detection explainability fcdd fully convolutional cnn',
     packages=packages,
     package_data=package_data,
     install_requires=dependencies,
+    python_requires='>=3.12',
 )

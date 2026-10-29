@@ -1,11 +1,11 @@
 name: fcdd
 channels:
-  - pytorch
   - conda-forge
 dependencies:
-  - python=3.9
-  - pytorch
-  - torchvision
-  - torchaudio
-  - cpuonly
+  - python=3.12
   - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch==2.14.0+cpu
+      - torchvision==0.29.0+cpu
+      - -r requirements.txt

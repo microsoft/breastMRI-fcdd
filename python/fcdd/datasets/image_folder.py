@@ -11,7 +11,8 @@ import torch
 from typing import Tuple, List
 from torch import Tensor
 from torch.utils.data import Subset, DataLoader
-from torchvision.datasets import ImageFolder
+from fcdd.datasets.safe_io import BoundedImageFolder, channel_statistics, find_classes
+from fcdd.util.safety import confined_path, validate_image_shape
 from torchvision.transforms.functional import to_tensor, to_pil_image
 from fcdd.datasets.bases import TorchvisionDataset, GTSubset
 from fcdd.datasets.online_supervisor import OnlineSupervisor
@@ -20,10 +21,7 @@ from fcdd.util.logging import Logger
 
 
 def extract_custom_classes(datapath: str) -> List[str]:
-    dir = os.path.join(datapath, "custom", "test")
-    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
-    classes.sort()
-    return classes
+    return find_classes(confined_path(datapath, "custom", "test"))[0]
 
 
 class ADImageFolderDataset(TorchvisionDataset):
@@ -88,8 +86,8 @@ class ADImageFolderDataset(TorchvisionDataset):
         assert (
             online_supervision
         ), "Artificial anomaly generation for custom datasets needs to be online"
-        self.trainpath = pt.join(root, self.base_folder, "train")
-        self.testpath = pt.join(root, self.base_folder, "test")
+        self.trainpath = confined_path(root, self.base_folder, "train")
+        self.testpath = confined_path(root, self.base_folder, "test")
         super().__init__(root, logger=logger)
 
         self.n_classes = 2  # 0: normal, 1: outlier
@@ -292,18 +290,12 @@ class ADImageFolderDataset(TorchvisionDataset):
             .tolist(),
         )
         loader = DataLoader(
-            dataset=ds, batch_size=2, shuffle=False, num_workers=4, pin_memory=False
+            dataset=ds, batch_size=2, shuffle=False, num_workers=0, pin_memory=False
         )
-        all_x = []
-        for x, _ in loader:
-            all_x.append(x)
-        all_x = torch.cat(all_x)
-        return all_x.permute(1, 0, 2, 3).flatten(1).mean(1), all_x.permute(
-            1, 0, 2, 3
-        ).flatten(1).std(1)
+        return channel_statistics(loader)
 
 
-class ImageFolderDataset(ImageFolder):
+class ImageFolderDataset(BoundedImageFolder):
     def __init__(
         self,
         root: str,
@@ -317,6 +309,7 @@ class ImageFolderDataset(ImageFolder):
         normal_classes=None,
         all_transform=None,
     ):
+        validate_image_shape((1, *raw_shape))
         super().__init__(root, transform=transform, target_transform=target_transform)
         if ovr:
             self.anomaly_labels = [self.target_transform(t) for t in self.targets]

@@ -1,12 +1,8 @@
 name: fcdd
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
 dependencies:
-  - python=3.9
-  - pytorch
-  - torchvision
-  - torchaudio
-  - pytorch-cuda=12.1  # change to 11.8 if your driver needs it
+  - python=3.12
   - pip
+  - pip:
+      - -r requirements.txt

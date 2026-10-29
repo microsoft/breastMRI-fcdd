@@ -17,6 +17,9 @@ from fcdd.training.setup import trainer_setup
 from fcdd.training.super_trainer import SuperTrainer
 from fcdd.util.logging import plot_many_roc, time_format
 from fcdd.util.metrics import mean_roc
+from fcdd.util.safety import (
+    MAX_LOG_BYTES, bounded_int, bounded_reader, confined_path, filename, canonical_root_path, validate_resources,
+)
 
 
 def extract_viz_ids(dir: str, cls: str, it: int):
@@ -29,21 +32,35 @@ def extract_viz_ids(dir: str, cls: str, it: int):
     """
     if dir is None:
         return ()
-    logfile = pt.join(dir, 'normal_{}'.format(cls), 'it_{}'.format(it), 'log.txt')
+    cls = bounded_int(cls, 'normal_class', 0, 100_000)
+    it = bounded_int(it, 'iteration', 0, 1000)
+    logfile = confined_path(dir, 'normal_{}'.format(cls), 'it_{}'.format(it), 'log.txt')
     if not pt.exists(logfile):
         raise ValueError('Trying to extract viz_ids from {}, but file doesnt exist'.format(logfile))
-    viz_ids = []
+    viz_ids = [[], []]
     curlbl = -1
-    with open(logfile, 'r') as reader:
-        lines = reader.readlines()
-        for line in lines:
+    with bounded_reader(logfile, MAX_LOG_BYTES) as reader:
+        size = 0
+        while raw := reader.readline(64 * 1024 + 1):
+            size += len(raw)
+            if len(raw) > 64 * 1024 or size > MAX_LOG_BYTES:
+                raise ValueError('Visualization log exceeds the line or file size budget')
+            line = raw.decode('utf-8')
             if line.startswith('Interpretation visualization paper image'):
                 labels = re.findall('label .*:', line)
                 ids = re.findall(r'\[.*\]', line)
-                assert len(labels) == 1 and len(ids) == 1
-                assert int(labels[0][6:-1]) > curlbl and int(labels[0][6:-1]) in [0, 1]
-                curlbl = int(labels[0][6:-1])
-                viz_ids.append(json.loads(re.findall(r'\[.*\]', line)[0]))
+                if len(labels) != 1 or len(ids) != 1:
+                    raise ValueError('Malformed visualization record')
+                label = int(labels[0][6:-1])
+                if label not in (0, 1) or label <= curlbl:
+                    raise ValueError('Visualization labels must be unique and ordered')
+                curlbl = label
+                indices = json.loads(ids[0])
+                if not isinstance(indices, list) or len(indices) > 1024:
+                    raise ValueError('Visualization record must contain at most 1024 indices')
+                for index in indices:
+                    bounded_int(index, 'visualization index', 0, 2_000_000 - 1)
+                viz_ids[label] = indices
     return viz_ids
 
 
@@ -83,7 +100,10 @@ class BaseRunner(object):
         )
         self.args = config(self.args)
         self.args = self.args.parse_args()
+        validate_resources(vars(self.args))
         if 'logdir_suffix' in vars(self.args):
+            if self.args.logdir_suffix:
+                filename(self.args.logdir_suffix)
             self.args.logdir += self.args.logdir_suffix
             del vars(self.args)['logdir_suffix']
         self.start = int(time.time())
@@ -98,6 +118,7 @@ class BaseRunner(object):
             # kwargs should contain all parameters of the setup function in training.setup
     ):
         kwargs = dict(kwargs)
+        validate_resources(kwargs)
         readme = kwargs.pop('readme', '')
         kwargs['log_start_time'] = self.start
         kwargs['viz_ids'] = viz_ids
@@ -125,7 +146,7 @@ class BaseRunner(object):
 
     def get_base_logdir(self):
         """ returns the actualy log directory """
-        return self.args.logdir.replace('{t}', time_format(self.start))
+        return canonical_root_path(self.args.logdir.replace('{t}', time_format(self.start)))
 
     def arg_to_ae(self, backup=True, restore=True):
         """ transfers a part of the parameters to train an autoencoder instead, with reconstruction loss heatmaps """
@@ -190,14 +211,19 @@ class SeedsRunner(BaseRunner):
     ):
         results = defaultdict(lambda: [])
         kwargs = dict(kwargs)
-        logdir = kwargs.pop('logdir')
+        bounded_int(it, 'iterations', 1, 1000)
+        logdir = canonical_root_path(kwargs.pop('logdir').replace('{t}', time_format(self.start)))
         viz_ids = kwargs.pop('viz_ids')
         its = range(it)
         if 'its_restrictions' in kwargs:
             its = kwargs['its_restrictions'] if kwargs['its_restrictions'] is not None else its
             del kwargs['its_restrictions']
+        if not 0 < len(its) <= it:
+            raise ValueError('Iteration restrictions must be a nonempty subset of the configured iterations')
         for i in its:
-            kwargs['logdir'] = pt.join(logdir, 'it_{}'.format(i))
+            bounded_int(i, 'iteration', 0, it - 1)
+        for i in its:
+            kwargs['logdir'] = confined_path(logdir, 'it_{}'.format(i))
             this_viz_ids = extract_viz_ids(viz_ids, kwargs['normal_class'], i)
             res = self.run_one(
                 this_viz_ids, **kwargs
@@ -229,13 +255,18 @@ class ClassesRunner(SeedsRunner):
         results = defaultdict(lambda: [])
         kwargs = dict(kwargs)
         it = kwargs.pop('it')
-        logdir = kwargs['logdir']
-        classes = range(no_classes(kwargs['dataset']))
+        logdir = canonical_root_path(kwargs['logdir'].replace('{t}', time_format(self.start)))
+        class_count = no_classes(kwargs['dataset'])
+        classes = range(class_count)
         if 'cls_restrictions' in kwargs:
             classes = kwargs['cls_restrictions'] if kwargs['cls_restrictions'] is not None else classes
             del kwargs['cls_restrictions']
+        if not 0 < len(classes) <= class_count:
+            raise ValueError('Class restrictions must be a nonempty subset of the dataset classes')
         for c in classes:
-            cls_logdir = pt.join(logdir, 'normal_{}'.format(c))
+            bounded_int(c, 'normal_class', 0, class_count - 1)
+        for c in classes:
+            cls_logdir = confined_path(logdir, 'normal_{}'.format(c))
             kwargs['logdir'] = cls_logdir
             kwargs['normal_class'] = c
             try:
@@ -257,4 +288,3 @@ class ClassesRunner(SeedsRunner):
                 labels=str_labels(kwargs['dataset']), mean=True, name=key
             )
         return {key: mean_roc(results[key]) for key in results}
-

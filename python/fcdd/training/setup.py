@@ -13,6 +13,7 @@ from fcdd.datasets.noise_modes import MODES
 from fcdd.models import load_nets
 from fcdd.models.bases import BaseNet
 from fcdd.util.logging import Logger
+from fcdd.util.safety import validate_resources
 
 OBJECTIVES = ("fcdd", "hsc", "bce", "fcddrefs", "fcddrefs_symmetric")
 SUPERVISE_MODES = (
@@ -143,6 +144,8 @@ def trainer_setup(
     :param normal_class: the class that is to be considered nominal.
     :return: a dictionary containing all necessary parameters to be passed to a Trainer instance.
     """
+    validate_resources(dict(batch_size=batch_size, workers=workers, quantile=quantile,
+                            resdown=resdown, oe_limit=oe_limit))
     assert objective in OBJECTIVES, "unknown objective: {}".format(objective)
     assert supervise_mode in SUPERVISE_MODES, "unknown supervise mode: {}".format(
         supervise_mode
